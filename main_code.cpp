@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <sstream>
 #include <iomanip>
+#include <algorithm>
 
 using namespace std;
 
@@ -18,6 +19,8 @@ int cli__menu_option_1();
 int cli__menu_option_2();
 int cli__menu_option_3();
 void cli__main_menu();
+char *getCmdOption(char **begin, char **end, const string &option);
+bool cmdOptionExists(char **begin, char **end, const string &option);
 // Intialization
 
 void fill_optab();
@@ -383,6 +386,21 @@ void pass_1_assembly()
 
 // CLI Function Definitions
 
+char *getCmdOption(char **begin, char **end, const string &option)
+{
+    char **itr = find(begin, end, option);
+    if (itr != end && ++itr != end)
+    {
+        return *itr;
+    }
+    return 0;
+}
+
+bool cmdOptionExists(char **begin, char **end, const string &option)
+{
+    return find(begin, end, option) != end;
+}
+
 void cli__main_menu()
 {
     cout << "  _____ _____ _______   ________                                 _     _           _____ _                 _       _              " << endl;
@@ -428,6 +446,17 @@ void cli__main_menu()
     //      << endl;
 }
 
+int countDigit(long long n)
+{
+    int count = 0;
+    while (n != 0)
+    {
+        n = n / 10;
+        ++count;
+    }
+    return count;
+}
+
 int cli__menu_option_1()
 {
     char encrypt_output_file_bool;
@@ -453,6 +482,10 @@ int cli__menu_option_1()
         {
             cout << "\nEnter the Key : ";
             cin >> cli_data.encryption_key;
+            if (countDigit(cli_data.encryption_key) != 6)
+            {
+                cout << "\nWrong,Enter 6 digit Number for Encryption:";
+            }
         }
         return 0;
     }
@@ -505,19 +538,30 @@ int cli__menu_option_3()
     return 0;
 }
 
-int main()
+int main(int argc, char *argv[])
 {
-    cli__main_menu();
-    // TODO: Check if assembler program starts with START and ends with END
-    cout << "------------OPTAB-------------" << endl;
-    fill_optab();
-    cout << "------------REGTAB-------------" << endl;
-    fill_regtab();
-    cout << "------------ADTAB-------------" << endl;
-    fill_adtab();
-    // cout << ADTAB["END"] << endl;
+    if (cmdOptionExists(argv, argv + argc, "-h"))
+    {
+        cout << R"( - Input filename -> Input only .asm file)" << endl;
+        cout << R"( - Machine code filename -> User Input of output filename for Machine code)" << endl;
+        cout << R"( - Object code filename -> User Input of output filename for Object code)" << endl;
+        cout << R"( - Do you want to encrypt the Output files? [y/n]: )" << endl;
+        cout << R"( -- 'n' -> default option when user doesn’t give anything)" << endl;
+        cout << R"( -- 'y' -> prompted to enter 6 digit key)" << endl;
+    }
+    else
+    {
+        cli__main_menu();
+        // TODO: Check if assembler program starts with START and ends with END
+        cout << "------------OPTAB-------------" << endl;
+        fill_optab();
+        cout << "------------REGTAB-------------" << endl;
+        fill_regtab();
+        cout << "------------ADTAB-------------" << endl;
+        fill_adtab();
+        // cout << ADTAB["END"] << endl;
 
-    pass_1_assembly();
-
+        pass_1_assembly();
+    }
     return 0;
 }
