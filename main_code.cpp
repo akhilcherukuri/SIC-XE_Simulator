@@ -35,10 +35,18 @@ void pass_1_assembly();
 bool check_validity();
 int validate_arguments(char *);
 int validate_opcode(char *);
+int determine_format_type();
+void assign_address();
+void insert_in_symtab();
+void increment_locctr();
 
 // Pass 2 Assembly Function Declarations
 
 void pass_2_assembly();
+
+// Global Variables
+
+int LOCCTR;
 
 // Data Structures
 struct temp_line_s
@@ -56,13 +64,10 @@ struct cli_data_s
     int encryption_key;
 };
 
-struct instruction_data_s
+union flags_u
 {
-    string label;
-    string opcode;
-    string operands;
-    uint32_t instr_address;
-    union flags_s
+    uint8_t flag;
+    struct flags_s
     {
         uint8_t e : 1;
         uint8_t p : 1;
@@ -73,7 +78,18 @@ struct instruction_data_s
     };
 };
 
+struct instruction_data_s
+{
+    string label;
+    string opcode;
+    string operands;
+    uint32_t instr_address;
+    flags_u addressing_flags;
+};
+
 temp_line_s temp_line;
+instruction_data_s temp_instruction_data;
+
 cli_data_s cli_data;
 
 vector<instruction_data_s> inst_v;
@@ -98,6 +114,13 @@ unordered_map<string, int> REGTAB;
 * int - AD NUMBER
 */
 unordered_map<string, int> ADTAB;
+
+// SYMTAB
+/* 
+* string - LABEL NAME
+* int - ADDRESS 
+*/
+unordered_map<string, int> SYMTAB;
 
 // Initialization
 
@@ -176,6 +199,8 @@ void fill_adtab()
 // Pass 1 Assembly
 
 // Pass 1 Assembly Function Definitions
+
+// Validation Function Definitions
 int validate_arguments(char *opcode_line)
 {
     char label[20], opcode[20], operand[20];
@@ -266,17 +291,64 @@ bool check_validity(char *opcode_line)
         if (err_code == 0)
         {
             // valid instruction line
+            return true;
         }
         else
         {
             cout << "Invalid instruction ocurred. Code: " << err_code << endl;
+            return false;
         }
     }
     else
     {
         // TODO: Error code mapping and error log file.
         cout << "Error ocurred. Code: " << err_code << endl;
+        return false;
     }
+}
+
+// Addressing Function Definitions
+
+int determine_format_type()
+{
+    pair<int, string> temp = OPTAB[temp_line.opcode];
+    int number_of_bytes = temp.first;
+    if ((temp_line.opcode[0] == '+') && (number_of_bytes == 3))
+    {
+        number_of_bytes = 4;
+    }
+    return number_of_bytes;
+}
+
+void increment_locctr()
+{
+    LOCCTR += determine_format_type();
+}
+
+void assign_address()
+{
+    temp_instruction_data.instr_address = 0;
+    if (temp_line.opcode == "START")
+    {
+        LOCCTR = stoi(temp_line.operand);
+        temp_instruction_data.instr_address = LOCCTR;
+    }
+}
+
+void insert_in_symtab()
+{
+    if (temp_line.label != "NA" && temp_line.label != " " && temp_line.label != "")
+    {
+        SYMTAB[temp_line.label] = LOCCTR;
+        cout << temp_line.label << " " << SYMTAB[temp_line.label] << endl;
+    }
+}
+
+void populate_temp_instruction_data()
+{
+    temp_instruction_data.label = temp_line.label;
+    temp_instruction_data.opcode = temp_line.opcode;
+    temp_instruction_data.operands = temp_line.operand;
 }
 
 void parse_sample_program_into_data_structure() // Include in pass 1
@@ -289,7 +361,11 @@ void parse_sample_program_into_data_structure() // Include in pass 1
         {
             if (check_validity(opcode_line))
             {
-                //assign_address();
+                assign_address();
+                insert_in_symtab();
+                increment_locctr();
+                populate_temp_instruction_data();
+                inst_v.push_back(temp_instruction_data);
             } // TODO: Handle error validity case
         }
         fclose(fp);
@@ -347,9 +423,9 @@ void cli__main_menu()
         cli__menu_option_3();
     }
 
-    cout << "\n"
-         << setw(140) << setfill('-') << '-' << "\n"
-         << endl;
+    // cout << "\n"
+    //      << setw(140) << setfill('-') << '-' << "\n"
+    //      << endl;
 }
 
 int cli__menu_option_1()
@@ -433,8 +509,11 @@ int main()
 {
     cli__main_menu();
     // TODO: Check if assembler program starts with START and ends with END
+    cout << "------------OPTAB-------------" << endl;
     fill_optab();
+    cout << "------------REGTAB-------------" << endl;
     fill_regtab();
+    cout << "------------ADTAB-------------" << endl;
     fill_adtab();
     // cout << ADTAB["END"] << endl;
 
