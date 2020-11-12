@@ -369,7 +369,7 @@ int cli__menu_option_3()
 int main()
 {
     //cli__main_menu();
-    TODO: Check if assembler program starts with START and ends with END
+    //TODO: Check if assembler program starts with START and ends with END
     fill_optab();
     fill_regtab();
     cout << REGTAB["X"] << endl;
