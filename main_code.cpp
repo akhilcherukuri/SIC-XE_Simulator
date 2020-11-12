@@ -11,7 +11,10 @@ using namespace std;
 int ERR_INVALID_ARGS = -1;
 int SUCCESS = 0;
 
-void cli__init();
+int cli__menu_option_1();
+int cli__menu_option_2();
+int cli__menu_option_3();
+void cli__main_menu();
 // Intialization
 
 void fill_optab();
@@ -41,6 +44,14 @@ struct temp_line_s
     string operand;
 };
 
+struct cli_data_s
+{
+    string filename;
+    string machine_code_filename;
+    string object_code_filename;
+    int encryption_key;
+};
+
 struct instruction_data_s
 {
     string label;
@@ -59,6 +70,7 @@ struct instruction_data_s
 };
 
 temp_line_s temp_line;
+cli_data_s cli_data;
 
 vector<instruction_data_s> inst_v;
 
@@ -131,7 +143,7 @@ void fill_regtab()
 // Pass 1 Assembly
 
 // Pass 1 Assembly Function Definitions
-int validate_arguments(char * opcode_line)
+int validate_arguments(char *opcode_line)
 {
     char label[20], opcode[20], operand[20];
 
@@ -139,22 +151,22 @@ int validate_arguments(char * opcode_line)
     strFromChar.append(opcode_line);
     istringstream ss(strFromChar);
 
-	string word;
+    string word;
 
-	int number_arg = 0;
+    int number_arg = 0;
     bool no_label = false;
-    if(opcode_line[0] == ' ')
+    if (opcode_line[0] == ' ')
     {
         no_label = true;
         number_arg++;
     }
-    
+
     int i = 0;
     string arr_instruction[3];
-    // TODO: Handle case for assembler directives. 
-    while (ss >> word) 
-	{
-        if(no_label && i == 0)
+    // TODO: Handle case for assembler directives.
+    while (ss >> word)
+    {
+        if (no_label && i == 0)
         {
             arr_instruction[0] = "NA"; // Label
             arr_instruction[1] = word; // Opcode
@@ -164,11 +176,12 @@ int validate_arguments(char * opcode_line)
         arr_instruction[i] = word;
         i++;
         number_arg++;
-	}
+    }
     // TODO: Add debug macros
     // cout << "Number of ARGS: " << number_arg << endl;
 
-    if (number_arg >= 4){
+    if (number_arg >= 4)
+    {
         return ERR_INVALID_ARGS;
     }
 
@@ -209,7 +222,7 @@ void parse_sample_program_into_data_structure() // Include in pass 1
 {
     FILE *fp = fopen("input_assembly_file.txt", "r");
     char opcode_line[100];
-    if(fp != NULL)
+    if (fp != NULL)
     {
         while (fgets(opcode_line, sizeof(opcode_line), fp))
         {
@@ -231,15 +244,137 @@ void pass_1_assembly()
     parse_sample_program_into_data_structure();
 }
 
+void cli__main_menu()
+{
+    cout << "  _____ _____ _______   ________                                 _     _           _____ _                 _       _              " << endl;
+    cout << " / ____|_   _/ ____\" \" / /  ____|   /\"                          | |   | |         / ____(_)               | |     | |             " << endl;
+    cout << "| (___   | || |     \" V /| |__     /  \"   ___ ___  ___ _ __ ___ | |__ | | ___ _ _| (___  _ _ __ ___  _   _| | __ _| |_ ___  _ __  " << endl;
+    cout << " \"___ \"  | || |      > < |  __|   / /\" \" / __/ __|/ _ \" '_ ` _ \"| '_ \"| |/ _ \" '__\"___ \"| | '_ ` _ \"| | | | |/ _` | __/ _ \"| '__| " << endl;
+    cout << " ____) |_| || |____ / . \"| |____ / ____ \\__ \"__ \"  __/ | | | | | |_) | |  __/ |  ____) | | | | | | | |_| | | (_| | || (_) | |    " << endl;
+    cout << "|_____/|_____\"_____/_/ \"_\"______/_/    \"_\"___/___/\"___|_| |_| |_|_.__/|_|___|_| |_____/|_|_| |_| |_|\"__,_|_|\"__,_|\"__\"___/|_|    " << endl;
+
+    cout << "\nEnter your choice\n";
+    cout << "1. Run Program\n";
+    cout << "2. Show Instructions\n";
+    cout << "3. Show Registers\n";
+    cout << "4. Quit\n"
+         << flush;
+
+    cout << "\n"
+         << setw(140) << setfill('-') << '-' << "\n"
+         << endl;
+
+    int cli_user_choice;
+    cin >> cli_user_choice;
+
+    cout << "\n"
+         << setw(140) << setfill('-') << '-' << "\n"
+         << endl;
+
+    if (cli_user_choice == 1)
+    {
+        cli__menu_option_1();
+    }
+    else if (cli_user_choice == 2)
+    {
+        cli__menu_option_2();
+    }
+    else if (cli_user_choice == 3)
+    {
+        cli__menu_option_3();
+    }
+
+    cout << "\n"
+         << setw(140) << setfill('-') << '-' << "\n"
+         << endl;
+}
+
+int cli__menu_option_1()
+{
+    char encrypt_output_file_bool; 
+    ifstream input_file;
+
+    cout << "\nEnter Input File Name : ";
+    cin >> cli_data.filename;
+    input_file.open((cli_data.filename + ".txt"));
+    if (input_file.fail())
+    {
+        cout << "\nFile Not Found" << endl;
+        return 0;
+    }
+    while (!input_file.fail())
+    {
+        cout << "\nEnter Machine Code Filename : ";
+        cin >> cli_data.machine_code_filename;
+        cout << "\nEnter Object Code Filename : ";
+        cin >> cli_data.object_code_filename;
+        cout << "\nDo you want to encrypt the Output file [y/n] : ";
+        cin >> encrypt_output_file_bool;
+        if (encrypt_output_file_bool == 'y')
+        {
+            cout << "\nEnter the Key : ";
+            cin >> cli_data.encryption_key;
+        }
+        return 0;
+    }
+    return 0;
+}
+
+int cli__menu_option_2()
+{
+    string instructions_line;
+    ifstream input_instructions_file;
+    cout << "\nEnter Instruction File Name : ";
+    cin >> cli_data.filename;
+    input_instructions_file.open((cli_data.filename + ".txt"));
+    if (input_instructions_file.is_open())
+    {
+        while (getline(input_instructions_file, instructions_line))
+        {
+            cout << instructions_line << '\n';
+        }
+        input_instructions_file.close();
+    }
+    else
+    {
+        cout << "Unable to open file";
+        return 0;
+    }
+    return 0;
+}
+
+int cli__menu_option_3()
+{
+    string instructions_line;
+    ifstream input_register_file;
+    cout << "\nEnter Register File Name : ";
+    cin >> cli_data.filename;
+    input_register_file.open((cli_data.filename + ".txt"));
+    if (input_register_file.is_open())
+    {
+        while (getline(input_register_file, instructions_line))
+        {
+            cout << instructions_line << '\n';
+        }
+        input_register_file.close();
+    }
+    else
+    {
+        cout << "Unable to open file";
+        return 0;
+    }
+    return 0;
+}
+
 int main()
 {
-    // TODO: Check if assembler program starts with START and ends with END
+    //cli__main_menu();
+    TODO: Check if assembler program starts with START and ends with END
     fill_optab();
     fill_regtab();
     cout << REGTAB["X"] << endl;
     cout << REGTAB["A"] << endl;
     cout << REGTAB["F"] << endl;
-
     pass_1_assembly();
 
     return 0;
