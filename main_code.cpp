@@ -1,9 +1,12 @@
-#include <bits/stdc++.h>
+#include <iostream>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <fstream>
 #include <string>
 #include <vector>
+#include <unordered_map>
+#include <sstream>
+#include <iomanip>
 
 using namespace std;
 
@@ -291,7 +294,7 @@ void cli__main_menu()
 
 int cli__menu_option_1()
 {
-    char encrypt_output_file_bool; 
+    char encrypt_output_file_bool;
     ifstream input_file;
 
     cout << "\nEnter Input File Name : ";
