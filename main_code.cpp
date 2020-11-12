@@ -22,6 +22,7 @@ void cli__main_menu();
 
 void fill_optab();
 void fill_regtab();
+void fill_adtab();
 
 void load__registers_from_file();
 void load__instructions_from_file();
@@ -84,12 +85,19 @@ vector<instruction_data_s> inst_v;
 * string - machine code  
 */
 unordered_map<string, pair<int, string>> OPTAB;
-// OPTAB
+// REGTAB
 /* 
 * string - REGISTER NAME
 * int - REGISTER NUMBER
 */
 unordered_map<string, int> REGTAB;
+
+// ADTAB
+/* 
+* string - AD NAME
+* int - AD NUMBER
+*/
+unordered_map<string, int> ADTAB;
 
 // Initialization
 
@@ -138,6 +146,28 @@ void fill_regtab()
         s1 = ss1.str();
 
         REGTAB[s1] = b;
+        cout << s1 << " " << b << endl;
+    }
+    fclose(fp);
+}
+
+void fill_adtab()
+{
+    FILE *fp = fopen("assembler_directives.txt", "r");
+    char ad_line[100];
+    while (fgets(ad_line, sizeof(ad_line), fp))
+    {
+        char a[10];
+        int b;
+        string s1;
+        stringstream ss1;
+
+        sscanf(ad_line, "%s %d", a, &b);
+
+        ss1 << a;
+        s1 = ss1.str();
+
+        ADTAB[s1] = b;
         cout << s1 << " " << b << endl;
     }
     fclose(fp);
@@ -199,12 +229,40 @@ int validate_arguments(char *opcode_line)
     return SUCCESS;
 }
 
+int validate_opcode(char *opcode_line)
+{
+    string temp_opcode;
+    temp_opcode = temp_line.opcode;
+    if (temp_line.opcode[0] == '+')
+    {
+        temp_opcode = &temp_line.opcode[1];
+    }
+    if (ADTAB.find(temp_opcode) != ADTAB.end())
+    {
+        // Set flag for assembler directive
+        return 0;
+    }
+    else if (OPTAB.find(temp_opcode) != OPTAB.end())
+    {
+        // if(check_in_assembler_directives())
+        // and then set flag for assembler directive
+
+        return 0;
+    }
+    else
+    {
+        cout << temp_line.opcode << " "
+             << "Invalid Opcode" << endl;
+        return 1;
+    }
+}
+
 bool check_validity(char *opcode_line)
 {
     int err_code = validate_arguments(opcode_line);
     if (err_code == 0)
     {
-        // err_code = validate_opcode(opcode_line);  // TODO: Implement validate_opcode()
+        err_code = validate_opcode(opcode_line); // TODO: Implement validate_opcode()
         if (err_code == 0)
         {
             // valid instruction line
@@ -246,6 +304,8 @@ void pass_1_assembly()
 {
     parse_sample_program_into_data_structure();
 }
+
+// CLI Function Definitions
 
 void cli__main_menu()
 {
@@ -371,13 +431,13 @@ int cli__menu_option_3()
 
 int main()
 {
-    //cli__main_menu();
-    //TODO: Check if assembler program starts with START and ends with END
+    cli__main_menu();
+    // TODO: Check if assembler program starts with START and ends with END
     fill_optab();
     fill_regtab();
-    cout << REGTAB["X"] << endl;
-    cout << REGTAB["A"] << endl;
-    cout << REGTAB["F"] << endl;
+    fill_adtab();
+    // cout << ADTAB["END"] << endl;
+
     pass_1_assembly();
 
     return 0;
