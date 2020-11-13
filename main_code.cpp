@@ -29,6 +29,8 @@ int SUCCESS = 0;
 int cli__run_program();
 void cli__main_menu();
 int cli__show_file_contents(char *);
+char *getCmdOption(char **begin, char **end, const string &option);
+bool cmdOptionExists(char **begin, char **end, const string &option);
 
 // Intialization
 
@@ -450,6 +452,21 @@ void pass_1_assembly()
 
 // CLI Function Definitions
 
+char *getCmdOption(char **begin, char **end, const string &option)
+{
+    char **itr = find(begin, end, option);
+    if (itr != end && ++itr != end)
+    {
+        return *itr;
+    }
+    return 0;
+}
+
+bool cmdOptionExists(char **begin, char **end, const string &option)
+{
+    return find(begin, end, option) != end;
+}
+
 void display_title()
 {
     cout << "  _____ _____ _______   ________                                 _     _           _____ _                 _       _              " << endl;
@@ -458,6 +475,16 @@ void display_title()
     cout << " \"___ \"  | || |      > < |  __|   / /\" \" / __/ __|/ _ \" '_ ` _ \"| '_ \"| |/ _ \" '__\"___ \"| | '_ ` _ \"| | | | |/ _` | __/ _ \"| '__| " << endl;
     cout << " ____) |_| || |____ / . \"| |____ / ____ \\__ \"__ \"  __/ | | | | | |_) | |  __/ |  ____) | | | | | | | |_| | | (_| | || (_) | |    " << endl;
     cout << "|_____/|_____\"_____/_/ \"_\"______/_/    \"_\"___/___/\"___|_| |_| |_|_.__/|_|___|_| |_____/|_|_| |_| |_|\"__,_|_|\"__,_|\"__\"___/|_|    " << endl;
+}
+
+void display_help()
+{
+    cout << R"( - Input filename -> Input only .asm file)" << endl;
+    cout << R"( - Machine code filename -> User Input of output filename for Machine code)" << endl;
+    cout << R"( - Object code filename -> User Input of output filename for Object code)" << endl;
+    cout << R"( - Do you want to encrypt the Output files? [y/n]: )" << endl;
+    cout << R"( -- 'n' -> default option when user doesn’t give anything)" << endl;
+    cout << R"( -- 'y' -> prompted to enter 6 digit key)" << endl;
 }
 
 void cli__main_menu()
@@ -646,8 +673,15 @@ int cli__show_file_contents(char *filename)
     return SUCCESS;
 }
 
-int main()
+int main(int argc, char *argv[])
 {
-    cli__main_menu();
-    return SUCCESS;
+    if (cmdOptionExists(argv, argv + argc, "-h"))
+    {
+        display_help();
+    }
+    else
+    {
+        cli__main_menu();
+        return SUCCESS;
+    }
 }
