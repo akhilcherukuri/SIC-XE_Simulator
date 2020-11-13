@@ -51,19 +51,13 @@ int determine_format_type();
 void assign_address();
 void insert_in_symtab();
 void increment_locctr();
+int get_length_of_constant();
 
 // Pass 2 Assembly Function
 
 void pass_2_assembly();
 
 // Global Data Structures
-
-struct temp_line_s
-{
-    string label;
-    string opcode;
-    string operand;
-};
 
 struct cli_data_s
 {
@@ -94,15 +88,15 @@ struct instruction_data_s
 {
     string label;
     string opcode;
-    string operands;
+    string operand;
     uint32_t instr_address;
     flags_u addressing_flags;
+    bool is_machine_code_required;
 };
 
 // Global Variables
 
 int LOCCTR;
-temp_line_s temp_line;
 instruction_data_s temp_instruction_data;
 cli_data_s cli_data;
 vector<instruction_data_s> inst_v;
@@ -213,6 +207,24 @@ void fill_adtab()
 // Pass 1 Assembly Functions
 
 // Validation Function Definitions
+
+int get_length_of_constant()
+{
+    if (temp_instruction_data.operand[0] == 'C' && temp_instruction_data.operand[1] == '\'')
+    {
+        return (temp_instruction_data.operand.length() - 3);
+    }
+    else if (temp_instruction_data.operand[0] == 'X' && temp_instruction_data.operand[1] == '\'')
+    {
+        return ((temp_instruction_data.operand.length() - 3) / 2);
+    }
+    else
+    {
+        cout << "Error: Invalid Operand found in assembler directive" << endl;
+        return -1;
+    }
+}
+
 int validate_arguments(char *opcode_line)
 {
     char label[20], opcode[20], operand[20];
@@ -255,13 +267,13 @@ int validate_arguments(char *opcode_line)
         return ERR_INVALID_ARGS;
     }
 
-    temp_line.label = arr_instruction[0];
-    temp_line.opcode = arr_instruction[1];
-    temp_line.operand = arr_instruction[2];
+    temp_instruction_data.label = arr_instruction[0];
+    temp_instruction_data.opcode = arr_instruction[1];
+    temp_instruction_data.operand = arr_instruction[2];
 
-    // cout << "Label " << temp_line.label << endl;
-    // cout << "Opcode " << temp_line.opcode << endl;
-    // cout << "Operand " << temp_line.operand << endl;
+    // cout << "Label " << temp_instruction_data.label << endl;
+    // cout << "Opcode " << temp_instruction_data.opcode << endl;
+    // cout << "Operand " << temp_instruction_data.operand << endl;
 
     return SUCCESS;
 }
@@ -269,24 +281,28 @@ int validate_arguments(char *opcode_line)
 int validate_opcode(char *opcode_line)
 {
     string temp_opcode;
-    temp_opcode = temp_line.opcode;
-    if (temp_line.opcode[0] == '+')
+    temp_opcode = temp_instruction_data.opcode;
+    if (temp_instruction_data.opcode[0] == '+')
     {
-        temp_opcode = &temp_line.opcode[1];
+        temp_opcode = &temp_instruction_data.opcode[1];
     }
     if (ADTAB.find(temp_opcode) != ADTAB.end())
     {
-        // TODO: Set flag for assembler directive
+        temp_instruction_data.is_machine_code_required = false;
+        if (temp_instruction_data.opcode == "BYTE")
+        {
+            temp_instruction_data.is_machine_code_required = true;
+        }
         return 0;
     }
     else if (OPTAB.find(temp_opcode) != OPTAB.end())
     {
-        // TODO: if(check_in_assembler_directives()) and then set flag for assembler directive
+        temp_instruction_data.is_machine_code_required = true;
         return 0;
     }
     else
     {
-        cout << temp_line.opcode << " "
+        cout << temp_instruction_data.opcode << " "
              << "Invalid Opcode" << endl;
         return 1;
     }
@@ -321,44 +337,84 @@ bool check_validity(char *opcode_line)
 
 int determine_format_type()
 {
-    pair<int, string> temp = OPTAB[temp_line.opcode];
-    int number_of_bytes = temp.first;
-    if ((temp_line.opcode[0] == '+') && (number_of_bytes == 3))
+    string temp_opcode;
+    int number_of_bytes = 0;
+    temp_opcode = temp_instruction_data.opcode;
+    if (temp_instruction_data.is_machine_code_required == true)
     {
-        number_of_bytes = 4;
+        if (temp_instruction_data.opcode[0] == '+')
+        {
+            temp_opcode = &temp_instruction_data.opcode[1];
+        }
+        pair<int, string> temp = OPTAB[temp_opcode];
+        number_of_bytes = temp.first;
+        // cout << "DEBUG 2 " << temp_instruction_data.opcode << " " << temp.first << " " << temp.second << endl;
+        if ((temp_instruction_data.opcode[0] == '+') && (number_of_bytes == 3))
+        {
+            // cout << " DEBUG 1" << temp_instruction_data.opcode << endl;
+            number_of_bytes = 4;
+        }
+        if (temp_instruction_data.opcode == "BYTE")
+        {
+            number_of_bytes = get_length_of_constant();
+            if (number_of_bytes == -1)
+            {
+                return -1;
+            }
+        }
     }
+    else
+    {
+        if (temp_instruction_data.opcode == "RESW")
+        {
+            number_of_bytes = 3 * stoi(temp_instruction_data.operand);
+        }
+        else if (temp_instruction_data.opcode == "RESB")
+        {
+            number_of_bytes = 1 * stoi(temp_instruction_data.operand);
+        }
+        else if (temp_instruction_data.opcode == "START" || temp_instruction_data.opcode == "END" || temp_instruction_data.opcode == "BASE")
+        {
+            number_of_bytes = 0;
+        }
+        else if (temp_instruction_data.opcode == "WORD")
+        {
+            number_of_bytes = 3;
+        }
+
+        else
+        {
+            cout << "Could not determine assembler directive" << endl;
+        }
+    }
+
     return number_of_bytes;
 }
 
 void increment_locctr()
 {
+    // cout << hex << LOCCTR << " " << temp_instruction_data.label << " " << temp_instruction_data.opcode << " " << temp_instruction_data.operand << endl;
     LOCCTR += determine_format_type();
 }
 
 void assign_address()
 {
+    // If START is not there initialize to 0
     temp_instruction_data.instr_address = 0;
-    if (temp_line.opcode == "START")
+    if (temp_instruction_data.opcode == "START")
     {
-        LOCCTR = stoi(temp_line.operand);
+        LOCCTR = stoi(temp_instruction_data.operand);
         temp_instruction_data.instr_address = LOCCTR;
     }
 }
 
 void insert_in_symtab()
 {
-    if (temp_line.label != "NA" && temp_line.label != " " && temp_line.label != "")
+    if (temp_instruction_data.label != "NA" && temp_instruction_data.label != " " && temp_instruction_data.label != "")
     {
-        SYMTAB[temp_line.label] = LOCCTR;
-        // cout << temp_line.label << " " << SYMTAB[temp_line.label] << endl;
+        SYMTAB[temp_instruction_data.label] = LOCCTR;
+        cout << temp_instruction_data.label << " " << hex << SYMTAB[temp_instruction_data.label] << endl;
     }
-}
-
-void populate_temp_instruction_data()
-{
-    temp_instruction_data.label = temp_line.label;
-    temp_instruction_data.opcode = temp_line.opcode;
-    temp_instruction_data.operands = temp_line.operand;
 }
 
 void parse_sample_program_into_data_structure()
@@ -367,14 +423,15 @@ void parse_sample_program_into_data_structure()
     char opcode_line[100];
     if (fp != NULL)
     {
+        memset(&temp_instruction_data, 0, sizeof(temp_instruction_data));
         while (fgets(opcode_line, sizeof(opcode_line), fp))
         {
+            // temp_instruction_data = {0};
             if (check_validity(opcode_line))
             {
                 assign_address();
                 insert_in_symtab();
                 increment_locctr();
-                populate_temp_instruction_data();
                 inst_v.push_back(temp_instruction_data);
             } // TODO: Handle error validity case
         }
@@ -471,6 +528,7 @@ void cli__main_menu()
     fill_regtab();
     cout << "------------ADTAB-------------" << endl;
     fill_adtab();
+    cout << "------------SYMTAB-------------" << endl;
 
     pass_1_assembly();
 #endif
