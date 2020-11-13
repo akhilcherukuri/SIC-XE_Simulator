@@ -7,20 +7,29 @@
 #include <unordered_map>
 #include <sstream>
 #include <iomanip>
-#include <algorithm>
+#include <stdio.h>
+#include <cstring>
 
 using namespace std;
 
+#define MAX_FILENAME_SIZE 128
+#define ENABLE_CLI 0
+
 // Error Codes
+
 int ERR_INVALID_ARGS = -1;
+int ERR_INVALID_INSTRUCTIONS_FILE = -2;
+int ERR_INVALID_REGISTERS_FILE = -3;
+int ERR_INVALID_INPUT_FILE = -4;
+int ERR_INVALID_ASSEMBLER_DIRECTIVE_FILE = -5;
 int SUCCESS = 0;
 
-int cli__menu_option_1();
-int cli__menu_option_2();
-int cli__menu_option_3();
+// Function Declarations
+
+int cli__run_program();
 void cli__main_menu();
-char *getCmdOption(char **begin, char **end, const string &option);
-bool cmdOptionExists(char **begin, char **end, const string &option);
+int cli__show_file_contents(char *);
+
 // Intialization
 
 void fill_optab();
@@ -30,7 +39,7 @@ void fill_adtab();
 void load__registers_from_file();
 void load__instructions_from_file();
 
-// Pass 1 Assembly Function Declarations
+// Pass 1 Assembly Function
 
 void parse_sample_program_into_data_structure();
 void pass_1_assembly();
@@ -43,15 +52,12 @@ void assign_address();
 void insert_in_symtab();
 void increment_locctr();
 
-// Pass 2 Assembly Function Declarations
+// Pass 2 Assembly Function
 
 void pass_2_assembly();
 
-// Global Variables
+// Global Data Structures
 
-int LOCCTR;
-
-// Data Structures
 struct temp_line_s
 {
     string label;
@@ -61,9 +67,12 @@ struct temp_line_s
 
 struct cli_data_s
 {
-    string filename;
-    string machine_code_filename;
-    string object_code_filename;
+    char assembler_directives_filename[MAX_FILENAME_SIZE];
+    char input_filename[MAX_FILENAME_SIZE];
+    char instructions_filename[MAX_FILENAME_SIZE];
+    char registers_filename[MAX_FILENAME_SIZE];
+    char machine_code_filename[MAX_FILENAME_SIZE];
+    char object_code_filename[MAX_FILENAME_SIZE];
     int encryption_key;
 };
 
@@ -90,64 +99,66 @@ struct instruction_data_s
     flags_u addressing_flags;
 };
 
+// Global Variables
+
+int LOCCTR;
 temp_line_s temp_line;
 instruction_data_s temp_instruction_data;
-
 cli_data_s cli_data;
-
 vector<instruction_data_s> inst_v;
 
 // OPTAB
-/* 
-* string - opcode
-* int - format number
-* string - machine code  
+/*
+* string - Opcode
+* int - Instruction Format Number
+* string - Machine Code
 */
 unordered_map<string, pair<int, string>> OPTAB;
+
 // REGTAB
-/* 
-* string - REGISTER NAME
-* int - REGISTER NUMBER
+/*
+* string - Register Name
+* int - Register Number
 */
 unordered_map<string, int> REGTAB;
 
 // ADTAB
-/* 
-* string - AD NAME
-* int - AD NUMBER
+/*
+* string - Assembler Directive Name
+* int - Assembler Directive Number
 */
 unordered_map<string, int> ADTAB;
 
 // SYMTAB
-/* 
-* string - LABEL NAME
-* int - ADDRESS 
+/*
+* string - Label Name
+* int - Address
 */
 unordered_map<string, int> SYMTAB;
 
-// Initialization
+// Initialization Functions
 
 void fill_optab()
 {
-    FILE *fp = fopen("instructions.txt", "r");
+    FILE *fp = fopen(cli_data.instructions_filename, "r");
     char opcode_line[100];
     while (fgets(opcode_line, sizeof(opcode_line), fp))
     {
-        char a[10];
-        int b;
-        char c[10];
+        char opcode_name[10];
+        int opcode_format;
+        char opcode_num[10];
         string s1;
         string s2;
         pair<int, string> temp;
         stringstream ss1, ss2;
 
-        sscanf(opcode_line, "%s %d %s", a, &b, c);
+        sscanf(opcode_line, "%s %d %s", opcode_name, &opcode_format, opcode_num);
 
-        ss1 << a;
+        ss1 << opcode_name;
         s1 = ss1.str();
-        ss2 << c;
+        ss2 << opcode_num;
         s2 = ss2.str();
-        temp.first = b;
+        temp.first = opcode_format;
         temp.second = s2;
         OPTAB[s1] = temp;
         cout << s1 << " " << temp.first << " " << temp.second << endl;
@@ -157,51 +168,49 @@ void fill_optab()
 
 void fill_regtab()
 {
-    FILE *fp = fopen("registers.txt", "r");
+    FILE *fp = fopen(cli_data.registers_filename, "r");
     char opcode_line[100];
     while (fgets(opcode_line, sizeof(opcode_line), fp))
     {
-        char a[10];
-        int b;
+        char reg_name[10];
+        int reg_num;
         string s1;
         stringstream ss1;
 
-        sscanf(opcode_line, "%s %d", a, &b);
+        sscanf(opcode_line, "%s %d", reg_name, &reg_num);
 
-        ss1 << a;
+        ss1 << reg_name;
         s1 = ss1.str();
 
-        REGTAB[s1] = b;
-        cout << s1 << " " << b << endl;
+        REGTAB[s1] = reg_num;
+        cout << s1 << " " << reg_num << endl;
     }
     fclose(fp);
 }
 
 void fill_adtab()
 {
-    FILE *fp = fopen("assembler_directives.txt", "r");
+    FILE *fp = fopen(cli_data.assembler_directives_filename, "r");
     char ad_line[100];
     while (fgets(ad_line, sizeof(ad_line), fp))
     {
-        char a[10];
-        int b;
+        char ad_name[10];
+        int ad_num;
         string s1;
         stringstream ss1;
 
-        sscanf(ad_line, "%s %d", a, &b);
+        sscanf(ad_line, "%s %d", ad_name, &ad_num);
 
-        ss1 << a;
+        ss1 << ad_name;
         s1 = ss1.str();
 
-        ADTAB[s1] = b;
-        cout << s1 << " " << b << endl;
+        ADTAB[s1] = ad_num;
+        cout << s1 << " " << ad_num << endl;
     }
     fclose(fp);
 }
 
-// Pass 1 Assembly
-
-// Pass 1 Assembly Function Definitions
+// Pass 1 Assembly Functions
 
 // Validation Function Definitions
 int validate_arguments(char *opcode_line)
@@ -267,14 +276,12 @@ int validate_opcode(char *opcode_line)
     }
     if (ADTAB.find(temp_opcode) != ADTAB.end())
     {
-        // Set flag for assembler directive
+        // TODO: Set flag for assembler directive
         return 0;
     }
     else if (OPTAB.find(temp_opcode) != OPTAB.end())
     {
-        // if(check_in_assembler_directives())
-        // and then set flag for assembler directive
-
+        // TODO: if(check_in_assembler_directives()) and then set flag for assembler directive
         return 0;
     }
     else
@@ -343,7 +350,7 @@ void insert_in_symtab()
     if (temp_line.label != "NA" && temp_line.label != " " && temp_line.label != "")
     {
         SYMTAB[temp_line.label] = LOCCTR;
-        cout << temp_line.label << " " << SYMTAB[temp_line.label] << endl;
+        // cout << temp_line.label << " " << SYMTAB[temp_line.label] << endl;
     }
 }
 
@@ -354,7 +361,7 @@ void populate_temp_instruction_data()
     temp_instruction_data.operands = temp_line.operand;
 }
 
-void parse_sample_program_into_data_structure() // Include in pass 1
+void parse_sample_program_into_data_structure()
 {
     FILE *fp = fopen("input_assembly_file.txt", "r");
     char opcode_line[100];
@@ -386,22 +393,7 @@ void pass_1_assembly()
 
 // CLI Function Definitions
 
-char *getCmdOption(char **begin, char **end, const string &option)
-{
-    char **itr = find(begin, end, option);
-    if (itr != end && ++itr != end)
-    {
-        return *itr;
-    }
-    return 0;
-}
-
-bool cmdOptionExists(char **begin, char **end, const string &option)
-{
-    return find(begin, end, option) != end;
-}
-
-void cli__main_menu()
+void display_title()
 {
     cout << "  _____ _____ _______   ________                                 _     _           _____ _                 _       _              " << endl;
     cout << " / ____|_   _/ ____\" \" / /  ____|   /\"                          | |   | |         / ____(_)               | |     | |             " << endl;
@@ -409,159 +401,195 @@ void cli__main_menu()
     cout << " \"___ \"  | || |      > < |  __|   / /\" \" / __/ __|/ _ \" '_ ` _ \"| '_ \"| |/ _ \" '__\"___ \"| | '_ ` _ \"| | | | |/ _` | __/ _ \"| '__| " << endl;
     cout << " ____) |_| || |____ / . \"| |____ / ____ \\__ \"__ \"  __/ | | | | | |_) | |  __/ |  ____) | | | | | | | |_| | | (_| | || (_) | |    " << endl;
     cout << "|_____/|_____\"_____/_/ \"_\"______/_/    \"_\"___/___/\"___|_| |_| |_|_.__/|_|___|_| |_____/|_|_| |_| |_|\"__,_|_|\"__,_|\"__\"___/|_|    " << endl;
-
-    cout << "\nEnter your choice\n";
-    cout << "1. Run Program\n";
-    cout << "2. Show Instructions\n";
-    cout << "3. Show Registers\n";
-    cout << "4. Quit\n"
-         << flush;
-
-    cout << "\n"
-         << setw(140) << setfill('-') << '-' << "\n"
-         << endl;
-
-    int cli_user_choice;
-    cin >> cli_user_choice;
-
-    cout << "\n"
-         << setw(140) << setfill('-') << '-' << "\n"
-         << endl;
-
-    if (cli_user_choice == 1)
-    {
-        cli__menu_option_1();
-    }
-    else if (cli_user_choice == 2)
-    {
-        cli__menu_option_2();
-    }
-    else if (cli_user_choice == 3)
-    {
-        cli__menu_option_3();
-    }
-
-    // cout << "\n"
-    //      << setw(140) << setfill('-') << '-' << "\n"
-    //      << endl;
 }
 
-int countDigit(long long n)
+void cli__main_menu()
 {
-    int count = 0;
-    while (n != 0)
-    {
-        n = n / 10;
-        ++count;
-    }
-    return count;
-}
+#if ENABLE_CLI == 1
+    int cli_user_choice = 0, ret_status = SUCCESS;
+    char filename[MAX_FILENAME_SIZE];
 
-int cli__menu_option_1()
-{
-    char encrypt_output_file_bool;
-    ifstream input_file;
+    display_title();
+    while (cli_user_choice <= 3)
+    {
+        cout << endl;
+        cout << "---------MENU---------\n";
+        cout << "1. Begin Assembler Processing\n";
+        cout << "2. Show Instructions\n";
+        cout << "3. Show Registers\n";
+        cout << "4. Quit\n"
+             << flush;
+        cout << "\nEnter your choice: ";
 
-    cout << "\nEnter Input File Name : ";
-    cin >> cli_data.filename;
-    input_file.open((cli_data.filename + ".txt"));
-    if (input_file.fail())
-    {
-        cout << "\nFile Not Found" << endl;
-        return 0;
-    }
-    while (!input_file.fail())
-    {
-        cout << "\nEnter Machine Code Filename : ";
-        cin >> cli_data.machine_code_filename;
-        cout << "\nEnter Object Code Filename : ";
-        cin >> cli_data.object_code_filename;
-        cout << "\nDo you want to encrypt the Output file [y/n] : ";
-        cin >> encrypt_output_file_bool;
-        if (encrypt_output_file_bool == 'y')
+        cin >> cli_user_choice;
+        if (cli_user_choice >= 4 || cli_user_choice <= 0)
         {
-            cout << "\nEnter the Key : ";
-            cin >> cli_data.encryption_key;
-            if (countDigit(cli_data.encryption_key) != 6)
-            {
-                cout << "\nWrong,Enter 6 digit Number for Encryption:";
-            }
+            cout << endl
+                 << "Exiting the program.";
+            exit(0);
         }
-        return 0;
+        switch (cli_user_choice)
+        {
+        case 1:
+            ret_status = cli__run_program();
+            if (ret_status != SUCCESS)
+                continue;
+            break;
+        case 2:
+            cout << "\nEnter Instruction File Name: ";
+            cin >> filename;
+            ret_status = cli__show_file_contents(filename);
+            if (ret_status != SUCCESS)
+                continue;
+            break;
+        case 3:
+            cout << "\nEnter Register File Name: ";
+            cin >> filename;
+            ret_status = cli__show_file_contents(filename);
+            if (ret_status != SUCCESS)
+                continue;
+            break;
+        default:
+            cout << endl
+                 << "Exiting the program.";
+            exit(0);
+        }
     }
-    return 0;
+#elif ENABLE_CLI == 0
+    strcpy(cli_data.input_filename, "input_assembly_file.txt");
+    strcpy(cli_data.instructions_filename, "instructions.txt");
+    strcpy(cli_data.registers_filename, "registers.txt");
+    strcpy(cli_data.assembler_directives_filename, "assembler_directives.txt");
+    strcpy(cli_data.machine_code_filename, "mcode.txt");
+    strcpy(cli_data.object_code_filename, "ocode.txt");
+    cli_data.encryption_key = 0;
+
+    cout << endl;
+    cout << "------------OPTAB-------------" << endl;
+    fill_optab();
+    cout << "------------REGTAB-------------" << endl;
+    fill_regtab();
+    cout << "------------ADTAB-------------" << endl;
+    fill_adtab();
+
+    pass_1_assembly();
+#endif
 }
 
-int cli__menu_option_2()
+int get_input_files()
+{
+    return SUCCESS;
+}
+
+int cli__run_program()
+{
+    char encrypt_output_file_option = 'n';
+    // get_input_files();
+
+    ifstream input_fp, instruction_fp, register_fp, assembler_directive_fp;
+
+    // Input Assembly File
+    cout << "\nEnter Input File Name: ";
+    cin >> cli_data.input_filename;
+    input_fp.open((cli_data.input_filename));
+
+    if (input_fp.fail())
+    {
+        cout << "\nError: Input File Not Found." << endl;
+        return ERR_INVALID_INPUT_FILE;
+    }
+
+    // Instruction File
+    cout << "\nEnter Instruction File Name: ";
+    cin >> cli_data.instructions_filename;
+    instruction_fp.open((cli_data.instructions_filename));
+
+    if (instruction_fp.fail())
+    {
+        cout << "\nError: Instruction File Not Found." << endl;
+        return ERR_INVALID_INSTRUCTIONS_FILE;
+    }
+
+    // Register File
+    cout << "\nRegister File Name: ";
+    cin >> cli_data.registers_filename;
+    register_fp.open((cli_data.registers_filename));
+
+    if (register_fp.fail())
+    {
+        cout << "\nError: Register File Not Found." << endl;
+        return ERR_INVALID_REGISTERS_FILE;
+    }
+
+    // Assembler Directive File
+    cout << "\nAssembler Directive File Name: ";
+    cin >> cli_data.assembler_directives_filename;
+    assembler_directive_fp.open((cli_data.assembler_directives_filename));
+
+    if (assembler_directive_fp.fail())
+    {
+        cout << "\nError: Assembler Directive File Not Found." << endl;
+        return ERR_INVALID_ASSEMBLER_DIRECTIVE_FILE;
+    }
+
+    cout << "\nEnter Machine Code Filename: ";
+    cin >> cli_data.machine_code_filename;
+
+    cout << "\nEnter Object Code Filename: ";
+    cin >> cli_data.object_code_filename;
+
+    cout << "\nDo you want to encrypt the Output File? [y/n]: ";
+    cin >> encrypt_output_file_option;
+
+    if (encrypt_output_file_option == 'y')
+    {
+        cout << "\nEnter 6-digit Encryption Key: ";
+        cin >> cli_data.encryption_key;
+    }
+    else
+    {
+        cout << "\nEncryption disabled.\n";
+        cli_data.encryption_key = 0;
+    }
+
+    // TODO: Check if assembler program starts with START and ends with END
+    cout << "------------OPTAB-------------" << endl;
+    fill_optab();
+    cout << "------------REGTAB-------------" << endl;
+    fill_regtab();
+    cout << "------------ADTAB-------------" << endl;
+    fill_adtab();
+    // cout << ADTAB["END"] << endl;
+
+    pass_1_assembly();
+
+    return SUCCESS;
+}
+
+int cli__show_file_contents(char *filename)
 {
     string instructions_line;
     ifstream input_instructions_file;
-    cout << "\nEnter Instruction File Name : ";
-    cin >> cli_data.filename;
-    input_instructions_file.open((cli_data.filename + ".txt"));
+    input_instructions_file.open(filename);
     if (input_instructions_file.is_open())
     {
         while (getline(input_instructions_file, instructions_line))
         {
-            cout << instructions_line << '\n';
+            cout << instructions_line << endl;
         }
         input_instructions_file.close();
     }
     else
     {
-        cout << "Unable to open file";
-        return 0;
+        cout << "Error: Unable to open " << filename << " file." << endl;
+        return ERR_INVALID_INPUT_FILE;
     }
-    return 0;
+    input_instructions_file.close();
+    return SUCCESS;
 }
 
-int cli__menu_option_3()
+int main()
 {
-    string instructions_line;
-    ifstream input_register_file;
-    cout << "\nEnter Register File Name : ";
-    cin >> cli_data.filename;
-    input_register_file.open((cli_data.filename + ".txt"));
-    if (input_register_file.is_open())
-    {
-        while (getline(input_register_file, instructions_line))
-        {
-            cout << instructions_line << '\n';
-        }
-        input_register_file.close();
-    }
-    else
-    {
-        cout << "Unable to open file";
-        return 0;
-    }
-    return 0;
-}
-
-int main(int argc, char *argv[])
-{
-    if (cmdOptionExists(argv, argv + argc, "-h"))
-    {
-        cout << R"( - Input filename -> Input only .asm file)" << endl;
-        cout << R"( - Machine code filename -> User Input of output filename for Machine code)" << endl;
-        cout << R"( - Object code filename -> User Input of output filename for Object code)" << endl;
-        cout << R"( - Do you want to encrypt the Output files? [y/n]: )" << endl;
-        cout << R"( -- 'n' -> default option when user doesn’t give anything)" << endl;
-        cout << R"( -- 'y' -> prompted to enter 6 digit key)" << endl;
-    }
-    else
-    {
-        cli__main_menu();
-        // TODO: Check if assembler program starts with START and ends with END
-        cout << "------------OPTAB-------------" << endl;
-        fill_optab();
-        cout << "------------REGTAB-------------" << endl;
-        fill_regtab();
-        cout << "------------ADTAB-------------" << endl;
-        fill_adtab();
-        // cout << ADTAB["END"] << endl;
-
-        pass_1_assembly();
-    }
-    return 0;
+    cli__main_menu();
+    return SUCCESS;
 }
