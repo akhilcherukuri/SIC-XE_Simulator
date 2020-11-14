@@ -182,6 +182,7 @@ int get_BYTE_constant_byte_len();
 
 // Pass 2 Assembly Functions
 
+void recalculate_base_displacement(int);
 int calculate_displacement(int);
 void decode_operand_fmt_2(int);
 void set_flags(int, int);
@@ -525,6 +526,24 @@ int pass_1_assembly()
 }
 
 // Pass 2 Assembly Function Definitions
+void recalculate_base_displacement(int vect_i)
+{
+    int new_disp = 0;
+    string temp_operand = inst_v[vect_i].operand;
+    if (temp_operand[0] == '#' || temp_operand[0] == '@') // Gets rid of special chars
+    {
+        temp_operand = &temp_operand[1];
+    }
+    temp_operand = temp_operand.substr(0, temp_operand.find(",", 0)); // Removes all characters after comma
+    if (SYMTAB.find(temp_operand) != SYMTAB.end())
+    {
+        uint16_t target_address = SYMTAB[temp_operand];
+        cout << "Inst address is: " << inst_v[vect_i].instr_address << " Format " << inst_v[vect_i].machine_bytes << "Target address: " << target_address << endl;
+        new_disp = uint16_t(target_address - base);
+    }
+    temp_machine_code.machine_code &= 0xFFF000FF;                  // Clearing old displacement
+    temp_machine_code.machine_code |= ((new_disp << 8) & 0xFFF00); // Also checks if disp is within 0 to 4095
+}
 
 int calculate_displacement(int vect_i)
 {
@@ -650,21 +669,24 @@ void set_flags(int vect_i, int disp)
     // PC-relative -2048 to 2047
     if (disp != 0 && temp_flags.flag_bits.e != 1)
     {
-        if (disp >= -2048 && disp <= 2047)
+        int16_t signed_disp = disp; // Handling negative displacement
+        cout << "HIT Disp here is: " << dec << disp << endl;
+        if (signed_disp >= -2048 && signed_disp <= 2047) // PC-relative
         {
             temp_flags.flag_bits.b = 0;
             temp_flags.flag_bits.p = 1;
         }
-        else if (disp >= 0 && disp <= 4095)
+        else // Base-relative displacement
         {
             temp_flags.flag_bits.b = 1;
             temp_flags.flag_bits.p = 0;
+            recalculate_base_displacement(vect_i);
         }
-        else
-        {
-            temp_flags.flag_bits.b = 0;
-            temp_flags.flag_bits.p = 0;
-        }
+        // else
+        // {
+        //     temp_flags.flag_bits.b = 0;
+        //     temp_flags.flag_bits.p = 0;
+        // }
     }
     cout << "Displacement is: " << hex << disp << endl;
     temp_machine_code.machine_code |= ((temp_flags.flag << 20) & 0x03F00000);
