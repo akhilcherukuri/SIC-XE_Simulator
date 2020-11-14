@@ -181,6 +181,7 @@ int get_BYTE_constant_byte_len();
 
 // Pass 2 Assembly Functions
 
+void calculate_displacement(int);
 void decode_operand_fmt_2(int);
 void set_flags(int);
 void look_up_opcode(int);
@@ -471,6 +472,7 @@ void assign_address()
         LOCCTR = stoi(temp_instruction_data.operand);
         temp_instruction_data.instr_address = LOCCTR;
     }
+    temp_instruction_data.instr_address = LOCCTR;
 }
 
 void insert_in_symtab()
@@ -522,6 +524,41 @@ int pass_1_assembly()
 }
 
 // Pass 2 Assembly Function Definitions
+
+void calculate_displacement(int vect_i)
+{
+    uint32_t disp = 0;
+    string temp_operand = inst_v[vect_i].operand;
+    if (temp_operand[0] == '#' || temp_operand[0] == '@') // Gets rid of special chars
+    {
+        temp_operand = &temp_operand[1];
+    }
+    temp_operand = temp_operand.substr(0, temp_operand.find(",", 0)); // Removes all characters after comma
+    if (inst_v[vect_i].machine_bytes == 3)                            // Calculating Format 3 displacement
+    {
+        if (SYMTAB.find(temp_operand) != SYMTAB.end())
+        {
+            uint16_t target_address = SYMTAB[temp_operand];
+            uint16_t next_instruction_address = inst_v[vect_i].instr_address + inst_v[vect_i].machine_bytes;
+            cout << "Inst address is: " << inst_v[vect_i].instr_address << " Format " << inst_v[vect_i].machine_bytes << "Target address: " << target_address << endl;
+            disp = uint16_t(target_address - next_instruction_address);
+        }
+        temp_machine_code.machine_code |= ((disp << 8) & 0xFFF00);
+    }
+    if (inst_v[vect_i].machine_bytes == 4)
+    {
+        if (SYMTAB.find(temp_operand) != SYMTAB.end()) // Calculating Format 4 displacement
+        {
+            disp = SYMTAB[temp_operand]; // Looking up label in symtab
+        }
+        else
+        {
+            disp = hextoint(temp_operand);
+        }
+        temp_machine_code.machine_code |= (disp & 0xFFFFF);
+    }
+}
+
 // Register decoding for instruction format-2
 void decode_operand_fmt_2(int vect_i)
 {
@@ -543,7 +580,7 @@ void decode_operand_fmt_2(int vect_i)
     {
         temp_operands_string += convert_int_to_hex_string(REGTAB[temp_operand_v[i]]);
     }
-    cout << "Operand String is: " << temp_operands_string << endl;
+    // cout << "Operand String is: " << temp_operands_string << endl;
 
     // temp_operands_string = "12"
     ss1 << hex << temp_operands_string;
@@ -558,18 +595,18 @@ void look_up_opcode(int vect_i)
 {
     string temp_opcode = inst_v[vect_i].opcode;
     cout << "Opcode is " << temp_opcode << endl;
-    // stringstream string_stream(temp_opcode);
+    // stringstream string_stream(temp_opcode); // Ignore
     int opcode_value = 0;
     if (inst_v[vect_i].opcode[0] == '+')
     {
         temp_opcode = &temp_opcode[1];
     }
     string machine_equivalent_hex_string = (OPTAB[temp_opcode].second);
-    cout << "Looked up OPTAB and found: " << machine_equivalent_hex_string << endl;
-    // string_stream << hex << machine_equivalent_hex_string; // <- hex_string B4 is 2 bytes
-    // string_stream >> opcode_value;                         // opcode_value <- 2 bytes <- B400
+    // cout << "Looked up OPTAB and found: " << machine_equivalent_hex_string << endl;
+    // string_stream << hex << machine_equivalent_hex_string; // <- hex_string B4 is 2 bytes // Ignore
+    // string_stream >> opcode_value;                         // opcode_value <- 2 bytes <- B400 // Ignore
     opcode_value = hextoint(machine_equivalent_hex_string);
-    cout << "Final opcode value (hex_int): " << hex << (opcode_value) << endl;
+    // cout << "Final opcode value (hex_int): " << hex << (opcode_value) << endl;
     temp_machine_code.bytes.first_byte = opcode_value;
 }
 
@@ -590,9 +627,12 @@ void set_flags(int vect_i)
     }
     else
     {
-        temp_flags.flag_bits.i = 1; // Assigning simple addressing
-        temp_flags.flag_bits.n = 1;
+        temp_flags.flag_bits.i = (temp_machine_code.bytes.first_byte & 1); // Assigning simple addressing
+        temp_flags.flag_bits.n = (temp_machine_code.bytes.first_byte & 2);
     }
+
+    // Base-relative 0 to 4095
+    // PC-relative -2048 to 2047
 
     if (temp_operand.find(",X") != temp_operand.npos) // Checking for x (Indexed Mode)
     {
@@ -614,17 +654,18 @@ void pass_2_assembly()
         if (inst_v[vect_i].machine_bytes != 0) // Ignore for Assembler Directives
         {
             look_up_opcode(vect_i); // Format 1 handled here
-            cout << "debug 3: " << inst_v[vect_i].opcode << endl;
+            // cout << "debug 3: " << inst_v[vect_i].opcode << endl;
             if (inst_v[vect_i].machine_bytes == 2) // Format 2 handled here
             {
                 decode_operand_fmt_2(vect_i);
             }
-            cout << "First byte " << hex << temp_machine_code.bytes.first_byte << " Second byte " << hex << temp_machine_code.bytes.second_byte << endl;
 
-            // if (inst_v[vect_i].machine_bytes == 3 || inst_v[vect_i].machine_bytes == 4)
-            // {
-            //     set_flags();
-            // }
+            if (inst_v[vect_i].machine_bytes == 3 || inst_v[vect_i].machine_bytes == 4)
+            {
+                calculate_displacement(vect_i);
+                set_flags(vect_i);
+            }
+            cout << "First byte " << hex << temp_machine_code.bytes.first_byte << " Second byte " << hex << temp_machine_code.bytes.second_byte << " Third byte " << hex << temp_machine_code.bytes.third_byte << " Fourth byte " << hex << temp_machine_code.bytes.fourth_byte << endl;
             // insert_final_machine_code();
         }
     }
