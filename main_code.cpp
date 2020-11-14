@@ -16,7 +16,7 @@ using namespace std;
 // -----Macro Definitions-----
 
 #define MAX_STRING_BUFF_SIZE 128
-#define ENABLE_CLI 1
+#define ENABLE_CLI 0
 #define INSTRUCTION_FMT_1_BYTE_LEN 1
 #define INSTRUCTION_FMT_2_BYTE_LEN 2
 #define INSTRUCTION_FMT_3_BYTE_LEN 3
@@ -79,18 +79,45 @@ struct cli_data_s
     int encryption_key;
 };
 
+struct flags_s
+{
+    uint8_t e : 1;
+    uint8_t p : 1;
+    uint8_t b : 1;
+    uint8_t x : 1;
+    uint8_t i : 1;
+    uint8_t n : 1;
+    uint8_t res2 : 1;
+    uint8_t res1 : 1;
+};
+
 union flags_u
 {
     uint8_t flag;
-    struct flags_s
-    {
-        uint8_t e : 1;
-        uint8_t p : 1;
-        uint8_t b : 1;
-        uint8_t x : 1;
-        uint8_t i : 1;
-        uint8_t n : 1;
-    };
+    flags_s flag_bits;
+};
+
+struct machine_code_s
+{
+    uint32_t fourth_byte : 8; // Disp (8-bits) (Format-4 only)
+    uint32_t third_byte : 8;  // Disp (8-bits)
+    uint32_t second_byte : 8; // Contains xbpe (4-bits) + Disp(4-bits)
+    uint32_t first_byte : 8;  // Contains opcode (6-bits) + ni (2-bits)
+};
+
+struct format_s // May not require
+{
+    uint32_t address : 20;
+    uint32_t flags : 6;
+    uint32_t opcode : 6;
+};
+
+union machine_code_u
+{
+
+    uint32_t machine_code;
+    machine_code_s bytes;
+    // format_s fmt; // May not require
 };
 
 struct instruction_data_s
@@ -101,14 +128,19 @@ struct instruction_data_s
     uint32_t instr_address;
     flags_u addressing_flags;
     bool is_machine_code_required;
+    int machine_bytes;
+    uint32_t final_machine_code;
 };
 
 // -----Global Variables-----
 
 int LOCCTR;
-instruction_data_s temp_instruction_data;
+instruction_data_s temp_instruction_data; // Used for Pass 1
 cli_data_s cli_data;
 vector<instruction_data_s> inst_v;
+machine_code_u temp_machine_code;
+flags_u temp_flags;
+// int vect_i;
 
 // -----Function Declarations-----
 
@@ -147,6 +179,9 @@ int get_BYTE_constant_byte_len();
 
 // Pass 2 Assembly Functions
 
+void input_registers(int);
+void set_flags(int);
+void look_up_opcode(int);
 void pass_2_assembly();
 
 // -----Function Definitions-----
@@ -396,6 +431,7 @@ int determine_format_type()
             cout << "ERROR: Could not determine the Assembler Directive." << endl;
         }
     }
+    temp_instruction_data.machine_bytes = number_of_bytes;
     return number_of_bytes;
 }
 
@@ -471,6 +507,110 @@ int pass_1_assembly()
 {
     int ret_status = parse_sample_program_into_data_structure();
     return ret_status;
+}
+
+// Pass 2 Assembly Function Definitions
+// Register decoding for instruction format-2
+void input_registers(int vect_i)
+{
+    string temp_operand = inst_v[vect_i].operand, temp_operands_string, temp_operand_v[2];
+    uint32_t operand_value = 0;
+    stringstream ss(temp_operand), ss1;
+    int i = 0;
+    while (ss.good())
+    {
+        string substr;
+        getline(ss, substr, ',');
+        temp_operand_v[i] = substr;
+        i++;
+    }
+    // ADD X, L
+    // at this point - v[0] = X, v[1] = L
+
+    for (size_t i = 0; i < 2; i++)
+    {
+        temp_operands_string += convert_int_to_hex_string(REGTAB[temp_operand_v[i]]);
+    }
+    cout << "String is: " << temp_operands_string << endl;
+
+    // temp_operands_string = "12"
+    ss1 << hex << temp_operands_string;
+    // ss1 -> 0x12 -- integer
+    ss1 >> operand_value; // << copy that 0x12 = 18 here
+    //operand_value = 18 (int) <--- 8 bits correct
+
+    temp_machine_code.bytes.second_byte = operand_value;
+}
+
+void look_up_opcode(int vect_i)
+{
+    string temp_opcode = inst_v[vect_i].opcode;
+    cout << "Opcode is " << temp_opcode << endl;
+    stringstream ss(temp_opcode);
+    int opcode_value;
+    if (inst_v[vect_i].opcode[0] == '+')
+    {
+        temp_opcode = &temp_instruction_data.opcode[1];
+    }
+    string machine_equivalent_hex_string = OPTAB[temp_opcode].second;
+    // cout << "Looked up OPTAB and found: " << machine_equivalent_hex_string << endl;
+    ss << hex << machine_equivalent_hex_string; // <- hex_string B4 is 2 bytes
+    ss >> opcode_value;                         // opcode_value <- 2 bytes <- B400
+    // cout << "Final opcode value (int): " << hex << (opcode_value >> 8) << endl;
+    temp_machine_code.bytes.first_byte = (opcode_value >> 8);
+}
+
+void set_flags(int vect_i)
+{
+    string temp_operand = inst_v[vect_i].operand;
+    temp_flags.flag = 0;
+
+    if (temp_operand[0] == '#') // Checking for immediate addressing
+    {
+        temp_flags.flag_bits.i = 1;
+        temp_flags.flag_bits.n = 0;
+    }
+    else if (temp_operand[0] == '@') // Checking for indirect addressing
+    {
+        temp_flags.flag_bits.i = 0;
+        temp_flags.flag_bits.n = 1;
+    }
+    else
+    {
+        temp_flags.flag_bits.i = 1; // Assigning simple addressing
+        temp_flags.flag_bits.n = 1;
+    }
+
+    if (temp_operand.find(",X") != temp_operand.npos) // Checking for x (Indexed Mode)
+    {
+        temp_flags.flag_bits.x = 1;
+    }
+    if (inst_v[vect_i].machine_bytes == 4 && temp_operand[0] == '+') // Checking for e
+    {
+        temp_flags.flag_bits.e = 1;
+    }
+}
+
+void pass_2_assembly()
+{
+    for (int vect_i = 0; vect_i < inst_v.size(); vect_i++)
+    {
+        if (inst_v[vect_i].machine_bytes != 0) // Ignore for Assembler Directives
+        {
+            look_up_opcode(vect_i);                // Format 1 handled here
+            if (inst_v[vect_i].machine_bytes == 2) // Format 2 handled here
+            {
+                input_registers(vect_i);
+            }
+            cout << "First byte " << hex << temp_machine_code.bytes.first_byte << " Second byte " << hex << temp_machine_code.bytes.second_byte << endl;
+
+            // if (inst_v[vect_i].machine_bytes == 3 || inst_v[vect_i].machine_bytes == 4)
+            // {
+            //     set_flags();
+            // }
+            // insert_final_machine_code();
+        }
+    }
 }
 
 // CLI Function Definitions
@@ -606,6 +746,7 @@ void cli__main_menu()
     cout << "------------SYMTAB-------------" << endl;
 
     pass_1_assembly();
+    pass_2_assembly();
 #endif
 }
 
