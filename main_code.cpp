@@ -154,6 +154,8 @@ int cli__show_file_contents(char *);
 
 // Utility Functions
 
+int hextoint(string hexstring);
+
 string convert_int_to_hex_string(int);
 
 // Intialization Functions
@@ -179,7 +181,7 @@ int get_BYTE_constant_byte_len();
 
 // Pass 2 Assembly Functions
 
-void input_registers(int);
+void decode_operand_fmt_2(int);
 void set_flags(int);
 void look_up_opcode(int);
 void pass_2_assembly();
@@ -187,6 +189,12 @@ void pass_2_assembly();
 // -----Function Definitions-----
 
 // Utility Functions
+
+int hextoint(string hexstring)
+{
+    int number = (int)strtol(hexstring.c_str(), NULL, 16);
+    return number;
+}
 
 string convert_int_to_hex_string(int hex_num)
 {
@@ -212,17 +220,21 @@ void fill_optab()
 
     while (fgets(opcode_line, sizeof(opcode_line), fp))
     {
-        char opcode_name[10], opcode_hex_str[10];
+        char opcode_name_char[10], opcode_hex_char[10];
         int opcode_format;
-        string s1;
-        stringstream ss1;
+        string opcode_hex_string, opcode_name_string;
+        stringstream opcode_hex_ss, opcode_name_ss;
 
-        sscanf(opcode_line, "%s %d %s", opcode_name, &opcode_format, opcode_hex_str);
+        sscanf(opcode_line, "%s %d %s", opcode_name_char, &opcode_format, opcode_hex_char);
 
-        ss1 << opcode_hex_str;
-        s1 = ss1.str();
-        OPTAB[opcode_name] = make_pair(opcode_format, s1);
-        cout << opcode_name << " " << opcode_format << " " << s1 << endl;
+        opcode_name_ss << opcode_name_char;
+        opcode_hex_ss << opcode_hex_char;
+
+        opcode_hex_string = opcode_hex_ss.str();
+        opcode_name_string = opcode_name_ss.str();
+
+        OPTAB[opcode_name_string] = make_pair(opcode_format, opcode_hex_string);
+        cout << opcode_name_string << " " << opcode_format << " " << opcode_hex_string << endl;
     }
     fclose(fp);
 }
@@ -511,7 +523,7 @@ int pass_1_assembly()
 
 // Pass 2 Assembly Function Definitions
 // Register decoding for instruction format-2
-void input_registers(int vect_i)
+void decode_operand_fmt_2(int vect_i)
 {
     string temp_operand = inst_v[vect_i].operand, temp_operands_string, temp_operand_v[2];
     uint32_t operand_value = 0;
@@ -531,7 +543,7 @@ void input_registers(int vect_i)
     {
         temp_operands_string += convert_int_to_hex_string(REGTAB[temp_operand_v[i]]);
     }
-    cout << "String is: " << temp_operands_string << endl;
+    cout << "Operand String is: " << temp_operands_string << endl;
 
     // temp_operands_string = "12"
     ss1 << hex << temp_operands_string;
@@ -546,18 +558,19 @@ void look_up_opcode(int vect_i)
 {
     string temp_opcode = inst_v[vect_i].opcode;
     cout << "Opcode is " << temp_opcode << endl;
-    stringstream ss(temp_opcode);
-    int opcode_value;
+    // stringstream string_stream(temp_opcode);
+    int opcode_value = 0;
     if (inst_v[vect_i].opcode[0] == '+')
     {
-        temp_opcode = &temp_instruction_data.opcode[1];
+        temp_opcode = &temp_opcode[1];
     }
-    string machine_equivalent_hex_string = OPTAB[temp_opcode].second;
-    // cout << "Looked up OPTAB and found: " << machine_equivalent_hex_string << endl;
-    ss << hex << machine_equivalent_hex_string; // <- hex_string B4 is 2 bytes
-    ss >> opcode_value;                         // opcode_value <- 2 bytes <- B400
-    // cout << "Final opcode value (int): " << hex << (opcode_value >> 8) << endl;
-    temp_machine_code.bytes.first_byte = (opcode_value >> 8);
+    string machine_equivalent_hex_string = (OPTAB[temp_opcode].second);
+    cout << "Looked up OPTAB and found: " << machine_equivalent_hex_string << endl;
+    // string_stream << hex << machine_equivalent_hex_string; // <- hex_string B4 is 2 bytes
+    // string_stream >> opcode_value;                         // opcode_value <- 2 bytes <- B400
+    opcode_value = hextoint(machine_equivalent_hex_string);
+    cout << "Final opcode value (hex_int): " << hex << (opcode_value) << endl;
+    temp_machine_code.bytes.first_byte = opcode_value;
 }
 
 void set_flags(int vect_i)
@@ -591,16 +604,20 @@ void set_flags(int vect_i)
     }
 }
 
+// By the end of Pass 1, the permanent structure (inst_v) has:
+//
 void pass_2_assembly()
 {
     for (int vect_i = 0; vect_i < inst_v.size(); vect_i++)
     {
+        memset(&temp_machine_code, 0, sizeof(temp_machine_code));
         if (inst_v[vect_i].machine_bytes != 0) // Ignore for Assembler Directives
         {
-            look_up_opcode(vect_i);                // Format 1 handled here
+            look_up_opcode(vect_i); // Format 1 handled here
+            cout << "debug 3: " << inst_v[vect_i].opcode << endl;
             if (inst_v[vect_i].machine_bytes == 2) // Format 2 handled here
             {
-                input_registers(vect_i);
+                decode_operand_fmt_2(vect_i);
             }
             cout << "First byte " << hex << temp_machine_code.bytes.first_byte << " Second byte " << hex << temp_machine_code.bytes.second_byte << endl;
 
