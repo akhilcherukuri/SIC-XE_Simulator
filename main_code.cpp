@@ -141,6 +141,7 @@ vector<instruction_data_s> inst_v;
 machine_code_u temp_machine_code;
 flags_u temp_flags;
 // int vect_i;
+int base;
 
 // -----Function Declarations-----
 
@@ -181,9 +182,9 @@ int get_BYTE_constant_byte_len();
 
 // Pass 2 Assembly Functions
 
-void calculate_displacement(int);
+int calculate_displacement(int);
 void decode_operand_fmt_2(int);
-void set_flags(int);
+void set_flags(int, int);
 void look_up_opcode(int);
 void pass_2_assembly();
 
@@ -525,7 +526,7 @@ int pass_1_assembly()
 
 // Pass 2 Assembly Function Definitions
 
-void calculate_displacement(int vect_i)
+int calculate_displacement(int vect_i)
 {
     uint32_t disp = 0;
     string temp_operand = inst_v[vect_i].operand;
@@ -557,6 +558,7 @@ void calculate_displacement(int vect_i)
         }
         temp_machine_code.machine_code |= (disp & 0xFFFFF);
     }
+    return disp;
 }
 
 // Register decoding for instruction format-2
@@ -610,9 +612,10 @@ void look_up_opcode(int vect_i)
     temp_machine_code.bytes.first_byte = opcode_value;
 }
 
-void set_flags(int vect_i)
+void set_flags(int vect_i, int disp)
 {
     string temp_operand = inst_v[vect_i].operand;
+    string temp_opcode = inst_v[vect_i].opcode;
     temp_flags.flag = 0;
 
     if (temp_operand[0] == '#') // Checking for immediate addressing
@@ -627,21 +630,44 @@ void set_flags(int vect_i)
     }
     else
     {
-        temp_flags.flag_bits.i = (temp_machine_code.bytes.first_byte & 1); // Assigning simple addressing
-        temp_flags.flag_bits.n = (temp_machine_code.bytes.first_byte & 2);
+        // temp_flags.flag_bits.i = (temp_machine_code.bytes.first_byte & 1); // Assigning simple addressing
+        // temp_flags.flag_bits.n = (temp_machine_code.bytes.first_byte & 2);
+        temp_flags.flag_bits.i = 1; // Assigning simple addressing
+        temp_flags.flag_bits.n = 1;
     }
-
-    // Base-relative 0 to 4095
-    // PC-relative -2048 to 2047
 
     if (temp_operand.find(",X") != temp_operand.npos) // Checking for x (Indexed Mode)
     {
         temp_flags.flag_bits.x = 1;
     }
-    if (inst_v[vect_i].machine_bytes == 4 && temp_operand[0] == '+') // Checking for e
+    if (inst_v[vect_i].machine_bytes == 4 && temp_opcode[0] == '+') // Checking for e
     {
         temp_flags.flag_bits.e = 1;
+        temp_flags.flag_bits.i = 1;
+        temp_flags.flag_bits.n = 1;
     }
+    // Base-relative 0 to 4095
+    // PC-relative -2048 to 2047
+    if (disp != 0 && temp_flags.flag_bits.e != 1)
+    {
+        if (disp >= -2048 && disp <= 2047)
+        {
+            temp_flags.flag_bits.b = 0;
+            temp_flags.flag_bits.p = 1;
+        }
+        else if (disp >= 0 && disp <= 4095)
+        {
+            temp_flags.flag_bits.b = 1;
+            temp_flags.flag_bits.p = 0;
+        }
+        else
+        {
+            temp_flags.flag_bits.b = 0;
+            temp_flags.flag_bits.p = 0;
+        }
+    }
+    cout << "Displacement is: " << hex << disp << endl;
+    temp_machine_code.machine_code |= ((temp_flags.flag << 20) & 0x03F00000);
 }
 
 // By the end of Pass 1, the permanent structure (inst_v) has:
@@ -650,7 +676,15 @@ void pass_2_assembly()
 {
     for (int vect_i = 0; vect_i < inst_v.size(); vect_i++)
     {
+        int disp = 0;
         memset(&temp_machine_code, 0, sizeof(temp_machine_code));
+        if (inst_v[vect_i].machine_bytes == 0) // Handling Base relative exception
+        {
+            if (inst_v[vect_i].opcode == "BASE")
+            {
+                base = SYMTAB[inst_v[vect_i].operand];
+            }
+        }
         if (inst_v[vect_i].machine_bytes != 0) // Ignore for Assembler Directives
         {
             look_up_opcode(vect_i); // Format 1 handled here
@@ -662,8 +696,8 @@ void pass_2_assembly()
 
             if (inst_v[vect_i].machine_bytes == 3 || inst_v[vect_i].machine_bytes == 4)
             {
-                calculate_displacement(vect_i);
-                set_flags(vect_i);
+                disp = calculate_displacement(vect_i);
+                set_flags(vect_i, disp);
             }
             cout << "First byte " << hex << temp_machine_code.bytes.first_byte << " Second byte " << hex << temp_machine_code.bytes.second_byte << " Third byte " << hex << temp_machine_code.bytes.third_byte << " Fourth byte " << hex << temp_machine_code.bytes.fourth_byte << endl;
             // insert_final_machine_code();
@@ -936,6 +970,7 @@ int main(int argc, char *argv[])
     else
     {
         cli__main_menu();
+        cout << "Base is:" << hex << base << endl;
         return SUCCESS;
     }
 }
