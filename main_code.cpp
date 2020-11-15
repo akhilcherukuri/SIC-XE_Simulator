@@ -182,6 +182,7 @@ int get_BYTE_constant_byte_len();
 
 // Pass 2 Assembly Functions
 
+void generate_final_machine_code(int);
 void load_constant(int);
 void recalculate_base_displacement(int);
 int calculate_displacement(int);
@@ -528,6 +529,29 @@ int pass_1_assembly()
 
 // Pass 2 Assembly Function Definitions
 
+void generate_final_machine_code(int vect_i)
+{
+    int num_bytes = inst_v[vect_i].machine_bytes;
+    switch (num_bytes)
+    {
+    case 1:
+        inst_v[vect_i].final_machine_code = (temp_machine_code.machine_code >> 24);
+        break;
+    case 2:
+        inst_v[vect_i].final_machine_code = (temp_machine_code.machine_code >> 16);
+        break;
+    case 3:
+        inst_v[vect_i].final_machine_code = (temp_machine_code.machine_code >> 8);
+        break;
+    case 4:
+        inst_v[vect_i].final_machine_code = (temp_machine_code.machine_code);
+        break;
+    default:
+        // Assembler Directive
+        break;
+    }
+}
+
 void load_constant(int vect_i)
 {
     string temp_operand = inst_v[vect_i].operand;
@@ -786,9 +810,10 @@ void pass_2_assembly()
                 disp = calculate_displacement(vect_i);
                 set_flags(vect_i, disp);
             }
-            // insert_final_machine_code();
         }
-        cout << inst_v[vect_i].opcode << " First byte " << hex << temp_machine_code.bytes.first_byte << " Second byte " << hex << temp_machine_code.bytes.second_byte << " Third byte " << hex << temp_machine_code.bytes.third_byte << " Fourth byte " << hex << temp_machine_code.bytes.fourth_byte << endl;
+        generate_final_machine_code(vect_i);
+        // cout << inst_v[vect_i].opcode << " First byte " << hex << temp_machine_code.bytes.first_byte << " Second byte " << hex << temp_machine_code.bytes.second_byte << " Third byte " << hex << temp_machine_code.bytes.third_byte << " Fourth byte " << hex << temp_machine_code.bytes.fourth_byte << endl;
+        cout << inst_v[vect_i].label << " " << inst_v[vect_i].opcode << " " << inst_v[vect_i].operand << " " << hex << inst_v[vect_i].final_machine_code << endl;
     }
 }
 
@@ -925,6 +950,7 @@ void cli__main_menu()
     cout << "------------SYMTAB-------------" << endl;
 
     pass_1_assembly();
+    cout << "-------------------------------" << endl;
     pass_2_assembly();
 #endif
 }
@@ -1057,7 +1083,7 @@ int main(int argc, char *argv[])
     else
     {
         cli__main_menu();
-        cout << "Base is:" << hex << base << endl;
+        // cout << "Base is:" << hex << base << endl;
         return SUCCESS;
     }
 }
