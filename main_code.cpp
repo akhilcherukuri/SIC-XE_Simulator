@@ -182,6 +182,7 @@ int get_BYTE_constant_byte_len();
 
 // Pass 2 Assembly Functions
 
+void load_immediate(int);
 void generate_final_machine_code(int);
 void load_constant(int);
 void recalculate_base_displacement(int);
@@ -552,6 +553,29 @@ void generate_final_machine_code(int vect_i)
     }
 }
 
+void load_immediate(int vect_i)
+{
+    string temp_operand = inst_v[vect_i].operand;
+    if (temp_operand[0] == '#') // Gets rid of special chars
+    {
+        temp_operand = &temp_operand[1];
+    }
+    if (SYMTAB.find(temp_operand) == SYMTAB.end())
+    {
+        uint32_t immediate = stoi(temp_operand);
+
+        // cout << "Immediate is: " << hex << immediate << endl;
+        if (inst_v[vect_i].machine_bytes == 3)
+        {
+            temp_machine_code.machine_code |= ((immediate << 8) & 0xFFF00);
+        }
+        if (inst_v[vect_i].machine_bytes == 4)
+        {
+            temp_machine_code.machine_code |= (immediate & 0xFFFFF);
+        }
+    }
+}
+
 void load_constant(int vect_i)
 {
     string temp_operand = inst_v[vect_i].operand;
@@ -657,7 +681,8 @@ int calculate_displacement(int vect_i)
         }
         else
         {
-            disp = hextoint(temp_operand);
+            // disp = hextoint(temp_operand); // Remember
+            disp = stoi(temp_operand);
         }
         temp_machine_code.machine_code |= (disp & 0xFFFFF);
     }
@@ -720,11 +745,12 @@ void set_flags(int vect_i, int disp)
     string temp_operand = inst_v[vect_i].operand;
     string temp_opcode = inst_v[vect_i].opcode;
     temp_flags.flag = 0;
-
     if (temp_operand[0] == '#') // Checking for immediate addressing
     {
+        // cout << "Operand is: " << temp_operand << endl;
         temp_flags.flag_bits.i = 1;
         temp_flags.flag_bits.n = 0;
+        load_immediate(vect_i);
     }
     else if (temp_operand[0] == '@') // Checking for indirect addressing
     {
@@ -746,8 +772,6 @@ void set_flags(int vect_i, int disp)
     if (inst_v[vect_i].machine_bytes == 4 && temp_opcode[0] == '+') // Checking for e
     {
         temp_flags.flag_bits.e = 1;
-        temp_flags.flag_bits.i = 1;
-        temp_flags.flag_bits.n = 1;
     }
     // Base-relative 0 to 4095
     // PC-relative -2048 to 2047
