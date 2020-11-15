@@ -182,6 +182,7 @@ int get_BYTE_constant_byte_len();
 
 // Pass 2 Assembly Functions
 
+void load_constant(int);
 void recalculate_base_displacement(int);
 int calculate_displacement(int);
 void decode_operand_fmt_2(int);
@@ -395,7 +396,7 @@ int determine_format_type()
     int number_of_bytes = 0;
     string temp_opcode = temp_instruction_data.opcode;
 
-    /* We calulate the machine code for instruction lines  *
+    /* We calculate the machine code for instruction lines  *
      * with valid opcodes or BYTE assembler directive only */
 
     if (temp_instruction_data.is_machine_code_required == true)
@@ -526,6 +527,65 @@ int pass_1_assembly()
 }
 
 // Pass 2 Assembly Function Definitions
+
+void load_constant(int vect_i)
+{
+    string temp_operand = inst_v[vect_i].operand;
+    int num_bytes = inst_v[vect_i].machine_bytes;
+    if (temp_operand[0] == 'C')
+    {
+        int temp_bytes[num_bytes];
+        temp_operand = temp_operand.substr(2, ((temp_operand.find("\'", 2)) - 2)); // Removes all characters after quote
+        // cout << "Char const is: " << temp_operand << " Size: " << num_bytes << endl;
+        memset(&temp_bytes, 0, sizeof(temp_bytes));
+        for (int j = 0; j < num_bytes; j++)
+        {
+            temp_bytes[j] = temp_operand[j];
+            // cout << "Temp byte: " << hex << temp_bytes[j] << " " << j << endl;
+        }
+        switch (num_bytes)
+        {
+        case 1:
+            temp_machine_code.bytes.first_byte = temp_bytes[0];
+            break;
+        case 2:
+            temp_machine_code.bytes.first_byte = temp_bytes[0];
+            temp_machine_code.bytes.second_byte = temp_bytes[1];
+            break;
+        case 3:
+            temp_machine_code.bytes.first_byte = temp_bytes[0];
+            temp_machine_code.bytes.second_byte = temp_bytes[1];
+            temp_machine_code.bytes.third_byte = temp_bytes[2];
+            break;
+        default:
+            cout << "Hit default case in switch" << endl;
+        }
+    }
+    else if (temp_operand[0] == 'X')
+    {
+        temp_operand = temp_operand.substr(2, ((temp_operand.find("\'", 2)) - 2)); // Removes all characters after quote
+        int temp_integer_constant = hextoint(temp_operand);
+        switch (num_bytes)
+        {
+        case 1:
+            temp_machine_code.machine_code = (temp_integer_constant << 24);
+            break;
+        case 2:
+            temp_machine_code.machine_code = (temp_integer_constant << 16);
+            break;
+        case 3:
+            temp_machine_code.machine_code = (temp_integer_constant << 8);
+            break;
+        default:
+            cout << "Hit default case in switch" << endl;
+        }
+    }
+    else
+    {
+        cout << "Invalid Character constant" << endl;
+    }
+}
+
 void recalculate_base_displacement(int vect_i)
 {
     int new_disp = 0;
@@ -538,7 +598,7 @@ void recalculate_base_displacement(int vect_i)
     if (SYMTAB.find(temp_operand) != SYMTAB.end())
     {
         uint16_t target_address = SYMTAB[temp_operand];
-        cout << "Inst address is: " << inst_v[vect_i].instr_address << " Format " << inst_v[vect_i].machine_bytes << "Target address: " << target_address << endl;
+        // cout << "Inst address is: " << inst_v[vect_i].instr_address << " Format " << inst_v[vect_i].machine_bytes << "Target address: " << target_address << endl;
         new_disp = uint16_t(target_address - base);
     }
     temp_machine_code.machine_code &= 0xFFF000FF;                  // Clearing old displacement
@@ -560,7 +620,7 @@ int calculate_displacement(int vect_i)
         {
             uint16_t target_address = SYMTAB[temp_operand];
             uint16_t next_instruction_address = inst_v[vect_i].instr_address + inst_v[vect_i].machine_bytes;
-            cout << "Inst address is: " << inst_v[vect_i].instr_address << " Format " << inst_v[vect_i].machine_bytes << "Target address: " << target_address << endl;
+            // cout << "Inst address is: " << inst_v[vect_i].instr_address << " Format " << inst_v[vect_i].machine_bytes << "Target address: " << target_address << endl;
             disp = uint16_t(target_address - next_instruction_address);
         }
         temp_machine_code.machine_code |= ((disp << 8) & 0xFFF00);
@@ -615,7 +675,7 @@ void decode_operand_fmt_2(int vect_i)
 void look_up_opcode(int vect_i)
 {
     string temp_opcode = inst_v[vect_i].opcode;
-    cout << "Opcode is " << temp_opcode << endl;
+    // cout << "Opcode is " << temp_opcode << endl;
     // stringstream string_stream(temp_opcode); // Ignore
     int opcode_value = 0;
     if (inst_v[vect_i].opcode[0] == '+')
@@ -669,8 +729,7 @@ void set_flags(int vect_i, int disp)
     // PC-relative -2048 to 2047
     if (disp != 0 && temp_flags.flag_bits.e != 1)
     {
-        int16_t signed_disp = disp; // Handling negative displacement
-        cout << "HIT Disp here is: " << dec << disp << endl;
+        int16_t signed_disp = disp;                      // Handling negative displacement
         if (signed_disp >= -2048 && signed_disp <= 2047) // PC-relative
         {
             temp_flags.flag_bits.b = 0;
@@ -688,7 +747,7 @@ void set_flags(int vect_i, int disp)
         //     temp_flags.flag_bits.p = 0;
         // }
     }
-    cout << "Displacement is: " << hex << disp << endl;
+    // cout << "Displacement is: " << hex << disp << endl;
     temp_machine_code.machine_code |= ((temp_flags.flag << 20) & 0x03F00000);
 }
 
@@ -700,6 +759,7 @@ void pass_2_assembly()
     {
         int disp = 0;
         memset(&temp_machine_code, 0, sizeof(temp_machine_code));
+        // Exceptions
         if (inst_v[vect_i].machine_bytes == 0) // Handling Base relative exception
         {
             if (inst_v[vect_i].opcode == "BASE")
@@ -707,7 +767,12 @@ void pass_2_assembly()
                 base = SYMTAB[inst_v[vect_i].operand];
             }
         }
-        if (inst_v[vect_i].machine_bytes != 0) // Ignore for Assembler Directives
+        if (inst_v[vect_i].opcode == "BYTE")
+        {
+            load_constant(vect_i);
+        }
+        // Format 1-4 Operations
+        if (inst_v[vect_i].machine_bytes != 0 && inst_v[vect_i].opcode != "BYTE" && inst_v[vect_i].is_machine_code_required == true) // Ignore for Assembler Directives
         {
             look_up_opcode(vect_i); // Format 1 handled here
             // cout << "debug 3: " << inst_v[vect_i].opcode << endl;
@@ -716,14 +781,14 @@ void pass_2_assembly()
                 decode_operand_fmt_2(vect_i);
             }
 
-            if (inst_v[vect_i].machine_bytes == 3 || inst_v[vect_i].machine_bytes == 4)
+            if (inst_v[vect_i].machine_bytes == 3 || inst_v[vect_i].machine_bytes == 4) // Format 3&4 handled here
             {
                 disp = calculate_displacement(vect_i);
                 set_flags(vect_i, disp);
             }
-            cout << "First byte " << hex << temp_machine_code.bytes.first_byte << " Second byte " << hex << temp_machine_code.bytes.second_byte << " Third byte " << hex << temp_machine_code.bytes.third_byte << " Fourth byte " << hex << temp_machine_code.bytes.fourth_byte << endl;
             // insert_final_machine_code();
         }
+        cout << inst_v[vect_i].opcode << " First byte " << hex << temp_machine_code.bytes.first_byte << " Second byte " << hex << temp_machine_code.bytes.second_byte << " Third byte " << hex << temp_machine_code.bytes.third_byte << " Fourth byte " << hex << temp_machine_code.bytes.fourth_byte << endl;
     }
 }
 
