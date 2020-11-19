@@ -142,6 +142,7 @@ machine_code_u temp_machine_code;
 flags_u temp_flags;
 // int vect_i;
 int base;
+char mod_line[500] = {0};
 
 // -----Function Declarations-----
 
@@ -182,6 +183,7 @@ int get_BYTE_constant_byte_len();
 
 // Pass 2 Assembly Functions
 
+void generate_final_object_code(int);
 void load_immediate(int);
 void generate_final_machine_code(int);
 void load_constant(int);
@@ -530,6 +532,201 @@ int pass_1_assembly()
 
 // Pass 2 Assembly Function Definitions
 
+void generate_final_object_code(int vect_i)
+{
+    string temp_operand = inst_v[vect_i].operand;
+    string temp_opcode = inst_v[vect_i].opcode;
+    string temp_label = inst_v[vect_i].label;
+    static int start_address = 0;
+    bool temp_code_required = inst_v[vect_i].is_machine_code_required;
+    FILE *fp = fopen("object_code.txt", "a");
+    if (temp_opcode == "START")
+    {
+        // Generate Header record
+        start_address = inst_v[vect_i].instr_address;
+        char header_line[100] = {0};
+        string program_name = temp_label;
+        string starting_address = convert_int_to_hex_string(start_address);
+        string length_of_object_program = convert_int_to_hex_string(LOCCTR);
+        // line = "H^ " + temp_opcode + convert_int_to_hex_string(LOCCTR);
+        strcat(header_line, "H^");
+        strcat(header_line, program_name.c_str());
+        strcat(header_line, "^");
+        for (int i = 0; i < (6 - starting_address.length()); i++) // Zero padding
+        {
+            strcat(header_line, "0");
+        }
+        strcat(header_line, starting_address.c_str());
+        strcat(header_line, "^");
+        for (int i = 0; i < (6 - length_of_object_program.length()); i++) // Zero padding
+        {
+            strcat(header_line, "0");
+        }
+        strcat(header_line, length_of_object_program.c_str());
+        strcat(header_line, "\0");
+        strcat(header_line, "\n");
+        fputs(header_line, fp);
+    }
+
+    else if (temp_opcode != "START" && temp_opcode != "END" && temp_code_required)
+    {
+        // Generate Text Record
+        static int column_index = 0;
+        static int number_of_bytes_in_record = 0;
+        static int current_record_address = start_address; // Col 2-7
+        static int prev_record_address = 0;
+        // static char text_line[200];
+        // length_of_object_code; // Col 8-9
+        // object_code;           // Col 10 -69
+        if (column_index == 0)
+        {
+            cout << "Hit!" << endl;
+            // strcat(text_line, "T^");
+            fputs("T^", fp);
+            column_index = 2;
+        }
+        if (column_index >= 2 && column_index <= 7)
+        {
+            current_record_address = inst_v[vect_i].instr_address;
+            string record_starting_address = convert_int_to_hex_string(current_record_address);
+            for (int i = 0; i < (6 - record_starting_address.length()); i++) // Zero padding
+            {
+                // strcat(text_line, "0");
+                fputs("0", fp);
+            }
+            // strcat(text_line, record_starting_address.c_str());
+            fputs(record_starting_address.c_str(), fp);
+            // strcat(text_line, "^");
+            fputs("^", fp);
+            column_index = 8;
+        }
+        if (column_index >= 8 && column_index <= 9)
+        {
+            // string length_of_object_code = "__";
+            // strcat(text_line, length_of_object_code.c_str()); // TODO: Calculate length at end
+            int length_of_object_code = 0;
+            if (current_record_address + 0x1D <= LOCCTR - 1) // TODO: Subsitute 1 with length of last instruction address number
+            {
+                length_of_object_code = 0x1d;
+            }
+            else
+            {
+                length_of_object_code = LOCCTR - 1 - prev_record_address;
+            }
+
+            fputs(convert_int_to_hex_string(length_of_object_code).c_str(), fp);
+            // strcat(text_line, "^");
+            fputs("^", fp);
+            column_index = 10;
+        }
+        if (column_index >= 10 && column_index <= 69)
+        {
+            string temp_m_code = convert_int_to_hex_string(inst_v[vect_i].final_machine_code); // TODO: Check for unsigned issues for 4 bytes
+            if (inst_v[vect_i].machine_bytes == 1)
+            {
+                for (int i = 0; i < (2 - temp_m_code.length()); i++) // Zero padding
+                {
+                    // strcat(text_line, "0");
+                    fputs("0", fp);
+                    column_index++;
+                }
+            }
+            if (inst_v[vect_i].machine_bytes == 2)
+            {
+                for (int i = 0; i < (4 - temp_m_code.length()); i++) // Zero padding
+                {
+                    // strcat(text_line, "0");
+                    fputs("0", fp);
+                    column_index++;
+                }
+            }
+            if (inst_v[vect_i].machine_bytes == 3)
+            {
+                for (int i = 0; i < (6 - temp_m_code.length()); i++) // Zero padding
+                {
+                    // strcat(text_line, "0");
+                    fputs("0", fp);
+                    column_index++;
+                }
+            }
+            if (inst_v[vect_i].machine_bytes == 4)
+            {
+                for (int i = 0; i < (8 - temp_m_code.length()); i++) // Zero padding
+                {
+                    // strcat(text_line, "0");
+                    fputs("0", fp);
+                    column_index++;
+                }
+            }
+            // strcat(text_line, temp_m_code.c_str());
+            fputs(temp_m_code.c_str(), fp);
+            // column_index += inst_v[vect_i].machine_bytes;
+            // number_of_bytes_in_record += inst_v[vect_i].machine_bytes;
+            column_index += temp_m_code.length();
+            cout << "COLUMN INDEX: " << dec << column_index << " Machine Code: " << temp_m_code << endl;
+            // cout << "DEBUG 7: " << hex << (inst_v.at(vect_i + 1).final_machine_code) << endl;
+
+            if (column_index <= 69)
+            {
+                // strcat(text_line, "^");
+                fputs("^", fp);
+            }
+            if ((column_index + 2) > 69) // (column_index + convert_int_to_hex_string(inst_v[vect_i + 1].final_machine_code).length()) > 69)
+            {
+                // strcat(text_line, "\n");
+                fputs("\n", fp);
+                // fputs(text_line, fp);
+                // memset(text_line, 0, sizeof(text_line));
+                // current_record_address = inst_v[vect_i].instr_address;
+                column_index = 0; // Start new text record
+                number_of_bytes_in_record = 0;
+                prev_record_address = inst_v[vect_i].instr_address;
+            }
+            if (temp_opcode != "START" && !(temp_flags.flag_bits.p || temp_flags.flag_bits.b) && temp_flags.flag_bits.n && (temp_flags.flag_bits.i) && temp_opcode != "END" && temp_code_required && inst_v[vect_i].machine_bytes == 4)
+            {
+                // Generate Modification record
+                int curr_addr = inst_v[vect_i].instr_address;
+                string starting_location_of_address_field = convert_int_to_hex_string(curr_addr + 1);
+                string length_of_the_address_field = "05";
+                strcat(mod_line, "M^");
+                for (int i = 0; i < (6 - starting_location_of_address_field.length()); i++) // Zero padding
+                {
+                    strcat(mod_line, "0");
+                }
+                strcat(mod_line, starting_location_of_address_field.c_str());
+                strcat(mod_line, "^");
+                strcat(mod_line, length_of_the_address_field.c_str());
+                strcat(mod_line, "\n");
+            }
+        }
+    }
+
+    else if (temp_opcode == "END")
+    {
+        // Write Modification record
+        fputs("\n", fp);
+        fputs(mod_line, fp);
+        // Generate End record
+        char end_line[100] = {0};
+        string starting_address = convert_int_to_hex_string(start_address);
+        strcat(end_line, "E^");
+        for (int i = 0; i < (6 - starting_address.length()); i++) // Zero padding
+        {
+            strcat(end_line, "0");
+        }
+        strcat(end_line, starting_address.c_str());
+        strcat(end_line, "\0");
+        strcat(end_line, "\n");
+        fputs(end_line, fp);
+    }
+    else
+    {
+        cout << "Instruction not found" << endl;
+    }
+
+    fclose(fp);
+}
+
 void generate_final_machine_code(int vect_i)
 {
     int num_bytes = inst_v[vect_i].machine_bytes;
@@ -837,7 +1034,8 @@ void pass_2_assembly()
         }
         generate_final_machine_code(vect_i);
         // cout << inst_v[vect_i].opcode << " First byte " << hex << temp_machine_code.bytes.first_byte << " Second byte " << hex << temp_machine_code.bytes.second_byte << " Third byte " << hex << temp_machine_code.bytes.third_byte << " Fourth byte " << hex << temp_machine_code.bytes.fourth_byte << endl;
-        cout << inst_v[vect_i].label << " " << inst_v[vect_i].opcode << " " << inst_v[vect_i].operand << " " << hex << inst_v[vect_i].final_machine_code << endl;
+        cout << hex << inst_v[vect_i].instr_address << " " << inst_v[vect_i].label << " " << inst_v[vect_i].opcode << " " << inst_v[vect_i].operand << " " << hex << inst_v[vect_i].final_machine_code << endl;
+        generate_final_object_code(vect_i);
     }
 }
 
@@ -1108,6 +1306,7 @@ int main(int argc, char *argv[])
     {
         cli__main_menu();
         // cout << "Base is:" << hex << base << endl;
+        cout << "LOCCTR is " << hex << LOCCTR << endl;
         return SUCCESS;
     }
 }
