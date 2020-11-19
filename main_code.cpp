@@ -1015,12 +1015,36 @@ void display_title()
 
 void display_help()
 {
-    cout << endl
-         << R"(---------ARGUMENT HELP SECTION---------)" << endl
+    cout << R"(
+            ██╗░░██╗███████╗██╗░░░░░██████╗░
+            ██║░░██║██╔════╝██║░░░░░██╔══██╗
+            ███████║█████╗░░██║░░░░░██████╔╝
+            ██╔══██║██╔══╝░░██║░░░░░██╔═══╝░
+            ██║░░██║███████╗███████╗██║░░░░░
+            ╚═╝░░╚═╝╚══════╝╚══════╝╚═╝░░░░░)" << endl
+            << endl;
+
+    cout << R"( - Option 1: Begin Assembler Processing)" << endl;
+    cout << R"( -- Input filename        -> Input Assembly filename)" << endl;
+    cout << R"( -- Machine code filename -> Output Machine code filename)" << endl;
+    cout << R"( -- Object code filename  -> Output Object code filename)" << endl
          << endl;
-    cout << R"( - Input filename        -> Input Assembly filename)" << endl;
-    cout << R"( - Machine code filename -> Output Machine code filename)" << endl;
-    cout << R"( - Object code filename  -> Output Object code filename)" << endl;
+    cout << R"( - Option 2: Show Instructions)" << endl;
+    cout << R"( -- Input filename        -> Input Instruction filename)" << endl
+         << endl;
+    cout << R"( - Option 3: Show Registers)" << endl;
+    cout << R"( -- Input filename        -> Input Registers filename)" << endl
+         << endl;
+    cout << R"( - Option 4: Encrypt Object Code)" << endl;
+    cout << R"( -- Input encryption key  -> Input Encryption Key (6 Digits))" << endl;
+    cout << R"( -- Input filename        -> Input Object code filename)" << endl;
+    cout << R"( -- Output filename       -> Output Encrypted Object code filename)" << endl
+         << endl;
+    cout << R"( - Option 5: Decrypt Object Code)" << endl;
+    cout << R"( -- Input decryption key  -> Input Decryption Key (6 Digits))" << endl;
+    cout << R"( -- Input filename        -> Input Encrypted Object code filename)" << endl;
+    cout << R"( -- Output filename       -> Output Decrypted Object code filename)" << endl
+         << endl;
 }
 
 bool validate_cli_encryption_key(string encr_key)
@@ -1284,6 +1308,11 @@ int cli__encrypt_file(char *input_filename, char *output_filename)
     string line;
 
     input_file.open(input_filename);
+    if (input_file.fail())
+    {
+        cout << "\nError: Input File Not Found." << endl;
+        return ERR_INVALID_INPUT_FILE;
+    }
     output_file.open(output_filename);
 
     buffer = input_file.get();
@@ -1327,6 +1356,11 @@ int cli__decrypt_file(char *input_filename, char *output_filename)
     char buffer;
 
     input_file.open(input_filename);
+    if (input_file.fail())
+    {
+        cout << "\nError: Input File Not Found." << endl;
+        return ERR_INVALID_INPUT_FILE;
+    }
     output_file.open(output_filename);
 
     buffer = input_file.get();
