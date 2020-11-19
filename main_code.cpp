@@ -1393,7 +1393,10 @@ int cli__encrypt_file(char *input_filename, char *output_filename)
     input_file.open(input_filename);
     if (input_file.fail())
     {
-        cout << "\nError: Input File Not Found." << endl;
+        char err_buf[128] = "\nError: Input File Not Found.";
+        cout << err_buf;
+        strncpy(error_buf, err_buf, sizeof(err_buf));
+        append_error_log_file();
         return ERR_INVALID_INPUT_FILE;
     }
     output_file.open(output_filename);
@@ -1443,7 +1446,10 @@ int cli__decrypt_file(char *input_filename, char *output_filename)
     input_file.open(input_filename);
     if (input_file.fail())
     {
-        cout << "\nError: Input File Not Found." << endl;
+        char err_buf[128] = "\nError: Input File Not Found.";
+        cout << err_buf;
+        strncpy(error_buf, err_buf, sizeof(err_buf));
+        append_error_log_file();
         return ERR_INVALID_INPUT_FILE;
     }
     output_file.open(output_filename);
