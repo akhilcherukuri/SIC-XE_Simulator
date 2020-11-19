@@ -23,6 +23,7 @@ using namespace std;
 #define INSTRUCTION_FMT_3_BYTE_LEN 3
 #define INSTRUCTION_FMT_4_BYTE_LEN 4
 #define MAX_TEXT_RECORD_COL_LEN 69
+#define ERROR_LOG_FILENAME "error_log.txt"
 
 // -----Error Codes-----
 
@@ -78,7 +79,7 @@ struct cli_data_s
     char registers_filename[MAX_STRING_BUFF_SIZE];
     char object_code_filename[MAX_STRING_BUFF_SIZE];
     int encryption_key;
-    int cypher_key;
+    int cipher_key;
 };
 
 struct flags_s
@@ -107,16 +108,8 @@ struct machine_code_s
     uint32_t first_byte : 8;  // Contains opcode (6-bits) + ni flags (2-bits)
 };
 
-struct format_s // May not require
-{
-    uint32_t address : 20;
-    uint32_t flags : 6;
-    uint32_t opcode : 6;
-};
-
 union machine_code_u
 {
-
     uint32_t machine_code;
     machine_code_s bytes;
 };
@@ -143,6 +136,7 @@ machine_code_u temp_machine_code;
 flags_u temp_flags;
 int base;
 char mod_line[500] = {0};
+char error_buf[4096];
 
 // -----Function Declarations-----
 
@@ -153,8 +147,9 @@ bool cmdOptionExists(char **begin, char **end, const string &option);
 bool validate_cli_encryption_key(string);
 int cli__run_program();
 int cli__show_file_contents(char *);
+void append_error_log_file();
 
-// Caesar Cypher
+// Caesar Cipher
 
 int cli__encrypt_file(char *input_filename, char *output_filename);
 int cli__decrypt_file(char *input_filename, char *output_filename);
@@ -184,7 +179,7 @@ int check_validity();
 int validate_instruction_arguments(char *);
 int validate_opcode(char *);
 int determine_format_type();
-int increment_locctr();
+int increment_locctr(int);
 int get_BYTE_constant_byte_len();
 
 // Pass 2 Assembly Functions
@@ -303,7 +298,10 @@ int get_BYTE_constant_byte_len()
     }
     else
     {
-        cout << "Error: Invalid Operand(s) found in assembler directive." << endl;
+        char err_buf[128] = "\nError: Invalid Operand(s) found in assembler directive.";
+        cout << err_buf;
+        strncat(error_buf, err_buf, sizeof(err_buf));
+        append_error_log_file();
         return ERR_INVALID_ASSEMBLER_DIRECTIVE_OPERAND;
     }
 }
@@ -355,6 +353,8 @@ int validate_opcode(char *opcode_line)
 {
     int ret_status = SUCCESS;
     string temp_opcode;
+    char err_buf[128] = {0};
+
     temp_opcode = temp_instruction_data.opcode;
     if (temp_instruction_data.opcode[0] == '+')
     {
@@ -376,7 +376,10 @@ int validate_opcode(char *opcode_line)
     else
     {
         ret_status = ERR_INVALID_OPCODE;
-        cout << "Invalid Opcode: " << temp_instruction_data.opcode << ". Error Code: " << ret_status << endl;
+        cout << "\nInvalid Opcode: " << temp_instruction_data.opcode << ". Error Code: " << ret_status << endl;
+        snprintf(err_buf, sizeof(err_buf), "\nInvalid Opcode: %s. Error Code: %d", (temp_instruction_data.opcode).c_str(), ret_status);
+        strncat(error_buf, err_buf, sizeof(err_buf));
+        append_error_log_file();
     }
     return ret_status;
 }
@@ -397,6 +400,8 @@ int check_validity(char *opcode_line)
 int determine_format_type()
 {
     int number_of_bytes = 0;
+    char err_buf[128] = {0};
+
     string temp_opcode = temp_instruction_data.opcode;
 
     /* We calculate the machine code for instruction lines  *
@@ -448,16 +453,18 @@ int determine_format_type()
         else
         {
             cout << "ERROR: Could not determine the Assembler Directive." << endl;
+            snprintf(err_buf, sizeof(err_buf), "\nERROR: Could not determine the Assembler Directive.");
+            strncat(error_buf, err_buf, sizeof(err_buf));
+            append_error_log_file();
         }
     }
     temp_instruction_data.machine_bytes = number_of_bytes;
     return number_of_bytes;
 }
 
-int increment_locctr()
+int increment_locctr(int num_of_bytes)
 {
     // cout << convert_int_to_hex_string(LOCCTR) << "  " << temp_instruction_data.label << "  " << temp_instruction_data.opcode << "  " << temp_instruction_data.operand << endl;
-    int num_of_bytes = determine_format_type();
 
     if (num_of_bytes == ERR_INVALID_NUM_OF_BYTES)
     {
@@ -492,9 +499,9 @@ void insert_in_symtab()
 
 int parse_sample_program_into_data_structure()
 {
-    int ret_status = SUCCESS, line_num;
+    int ret_status = SUCCESS, line_num = 0;
     FILE *fp = fopen(cli_data.input_filename, "r");
-    char opcode_line[100];
+    char opcode_line[100], err_buf[128] = {0};
     if (fp != NULL)
     {
         memset(&temp_instruction_data, 0, sizeof(temp_instruction_data));
@@ -504,20 +511,27 @@ int parse_sample_program_into_data_structure()
             {
                 assign_address();
                 insert_in_symtab();
-                ret_status = increment_locctr();
+                int num_of_bytes = determine_format_type();
+                ret_status = increment_locctr(num_of_bytes);
                 if (ret_status != SUCCESS)
                 {
-                    cout << "Error at line " << line_num << ". Return Code: " << ret_status << endl;
+                    cout << "\nError at line " << line_num + 1 << ". Return Code: " << ret_status << endl;
+                    snprintf(err_buf, sizeof(err_buf), "\nError at line %d. Return Code: %d", line_num, ret_status);
+                    strncat(error_buf, err_buf, sizeof(err_buf));
+                    append_error_log_file();
                 }
                 inst_v.push_back(temp_instruction_data);
-            } // TODO: Handle error validity case
+            }
             line_num++;
         }
         fclose(fp);
     }
     else
     {
-        cout << "Error opening the Input file: " << cli_data.input_filename << endl;
+        char buf[128] = {0};
+        snprintf(buf, sizeof(buf), "\nError opening the Input file: %s", cli_data.input_filename);
+        strncat(error_buf, buf, sizeof(buf));
+        append_error_log_file();
         return ERR_INVALID_INPUT_FILE;
     }
     return SUCCESS;
@@ -758,7 +772,10 @@ void load_constant(std::vector<instruction_data_s>::iterator it)
             temp_machine_code.bytes.third_byte = temp_bytes[2];
             break;
         default:
-            cout << "Hit default case in switch" << endl;
+            char buf[128] = "\nError: Invalid case for Constant Char operand";
+            cout << buf;
+            strncat(error_buf, buf, sizeof(buf));
+            append_error_log_file();
         }
     }
     else if (temp_operand[0] == 'X')
@@ -777,12 +794,18 @@ void load_constant(std::vector<instruction_data_s>::iterator it)
             temp_machine_code.machine_code = (temp_integer_constant << 8);
             break;
         default:
-            cout << "Hit default case in switch" << endl;
+            char buf[128] = "\nError: Invalid case for Hex Char operand";
+            cout << buf;
+            strncat(error_buf, buf, sizeof(buf));
+            append_error_log_file();
         }
     }
     else
     {
-        cout << "Invalid Character constant" << endl;
+        char buf[128] = "\nError: Invalid Character constant";
+        cout << buf;
+        strncat(error_buf, buf, sizeof(buf));
+        append_error_log_file();
     }
 }
 
@@ -986,6 +1009,15 @@ void pass_2_assembly()
     }
 }
 
+// Error Log Function Definitions
+
+void append_error_log_file()
+{
+    FILE *fp = fopen(ERROR_LOG_FILENAME, "a");
+    fputs(error_buf, fp);
+    fclose(fp);
+}
+
 // CLI Function Definitions
 
 char *getCmdOption(char **begin, char **end, const string &option)
@@ -1086,14 +1118,15 @@ void cli__main_menu()
         cout << "1. Begin Assembler Processing\n";
         cout << "2. Show Instructions\n";
         cout << "3. Show Registers\n";
-        cout << "4. Encrypt Object Code\n";
-        cout << "5. Decrypt Object Code\n";
-        cout << "6. Quit\n"
+        cout << "4. Show Assembler Directives\n";
+        cout << "5. Encrypt Object Code\n";
+        cout << "6. Decrypt Object Code\n";
+        cout << "7. Quit\n"
              << flush;
         cout << "\n> Enter your choice: ";
 
         cin >> cli_user_choice;
-        if (cli_user_choice >= 7 || cli_user_choice <= 0)
+        if (cli_user_choice >= 8 || cli_user_choice <= 0)
         {
             cout << endl
                  << "Invalid user choice. Exiting the program.";
@@ -1121,15 +1154,25 @@ void cli__main_menu()
                 continue;
             break;
         case 4:
+            cout << "\n> Enter Assembler Directives File Name: ";
+            cin >> filename;
+            ret_status = cli__show_file_contents(filename);
+            if (ret_status != SUCCESS)
+                continue;
+            break;
+        case 5:
             cout << "\n> Enter 6-digit Encryption Key: ";
             cin >> encry_key;
             if (validate_cli_encryption_key(encry_key) == true)
             {
                 key_generator(cli_data.encryption_key);
             }
-            else  if (validate_cli_encryption_key(encry_key) == false)
+            else if (validate_cli_encryption_key(encry_key) == false)
             {
-                cout << "Invalid Encryption Key. Enter 6 digits only." << endl;
+                char err_buf[128] = "\nError: Invalid Encryption Key. Enter 6 digits only.";
+                cout << err_buf;
+                strncpy(error_buf, err_buf, sizeof(err_buf));
+                append_error_log_file();
                 cli_data.encryption_key = 0;
             }
             cout << "\n> Enter Object Code Input File Name: ";
@@ -1140,16 +1183,19 @@ void cli__main_menu()
             if (ret_status != SUCCESS)
                 continue;
             break;
-        case 5:
+        case 6:
             cout << "\n> Enter 6-digit Decryption Key: ";
             cin >> encry_key;
             if (validate_cli_encryption_key(encry_key) == true)
             {
                 key_generator(cli_data.encryption_key);
             }
-            else  if (validate_cli_encryption_key(encry_key) == false)
+            else if (validate_cli_encryption_key(encry_key) == false)
             {
-                cout << "Invalid Encryption Key. Enter 6 digits only." << endl;
+                char err_buf[128] = "\nError: Invalid Encryption Key. Enter 6 digits onlyyy.";
+                cout << err_buf;
+                strncpy(error_buf, err_buf, sizeof(err_buf));
+                append_error_log_file();
                 cli_data.encryption_key = 0;
             }
             cout << "\n> Enter Encrypted Object Code Input File Name: ";
@@ -1187,12 +1233,14 @@ void cli__main_menu()
     pass_1_assembly();
     cout << "-------------------------------" << endl;
     pass_2_assembly();
+    append_error_log_file();
 #endif
 }
 
 int cli__run_program()
 {
     char encrypt_output_file_option = 'n';
+    char err_buf[128] = {0};
     string encry_key;
     ifstream input_fp, instruction_fp, register_fp, assembler_directive_fp;
 
@@ -1202,7 +1250,10 @@ int cli__run_program()
 
     if (input_fp.fail())
     {
-        cout << "\nError: Input File Not Found." << endl;
+        cout << "\nError opening the Input file: " << cli_data.input_filename;
+        snprintf(err_buf, sizeof(err_buf), "\nError opening the Input file: %s\n", cli_data.input_filename);
+        strncpy(error_buf, err_buf, sizeof(err_buf));
+        append_error_log_file();
         return ERR_INVALID_INPUT_FILE;
     }
 
@@ -1212,7 +1263,10 @@ int cli__run_program()
 
     if (instruction_fp.fail())
     {
-        cout << "\nError: Instruction File Not Found." << endl;
+        cout << "\nError: Instruction File Not Found.";
+        snprintf(err_buf, sizeof(err_buf), "\nError: Instruction File Not Found.");
+        strncpy(error_buf, err_buf, sizeof(err_buf));
+        append_error_log_file();
         return ERR_INVALID_INSTRUCTIONS_FILE;
     }
 
@@ -1222,7 +1276,10 @@ int cli__run_program()
 
     if (register_fp.fail())
     {
-        cout << "\nError: Register File Not Found." << endl;
+        cout << "\nError: Register File Not Found.";
+        snprintf(err_buf, sizeof(err_buf), "\nError: Register File Not Found.");
+        strncpy(error_buf, err_buf, sizeof(err_buf));
+        append_error_log_file();
         return ERR_INVALID_REGISTERS_FILE;
     }
 
@@ -1232,7 +1289,10 @@ int cli__run_program()
 
     if (assembler_directive_fp.fail())
     {
-        cout << "\nError: Assembler Directive File Not Found." << endl;
+        cout << "\nError: Assembler Directive File Not Found.";
+        snprintf(err_buf, sizeof(err_buf), "\nError: Assembler Directive File Not Found.");
+        strncpy(error_buf, err_buf, sizeof(err_buf));
+        append_error_log_file();
         return ERR_INVALID_ASSEMBLER_DIRECTIVE_FILE;
     }
 
@@ -1264,6 +1324,7 @@ int cli__show_file_contents(char *filename)
 {
     string line_buff;
     ifstream file_fp;
+    char err_buf[128] = {0};
 
     file_fp.open(filename);
 
@@ -1276,7 +1337,10 @@ int cli__show_file_contents(char *filename)
     }
     else
     {
-        cout << "Error: Unable to open file: " << filename << endl;
+        cout << "\nError: Unable to open file: " << filename;
+        snprintf(err_buf, sizeof(err_buf), "\nError: Unable to open file: %s", filename);
+        strncpy(error_buf, err_buf, sizeof(err_buf));
+        append_error_log_file();
         return ERR_INVALID_INPUT_FILE;
     }
 
@@ -1288,14 +1352,14 @@ int cli__show_file_contents(char *filename)
 
 void key_generator(int encryption_key)
 {
-    while (encryption_key > 0 || cli_data.cypher_key > 9)
+    while (encryption_key > 0 || cli_data.cipher_key > 9)
     {
         if (encryption_key == 0)
         {
-            encryption_key = cli_data.cypher_key;
-            cli_data.cypher_key = 0;
+            encryption_key = cli_data.cipher_key;
+            cli_data.cipher_key = 0;
         }
-        cli_data.cypher_key += encryption_key % 10;
+        cli_data.cipher_key += encryption_key % 10;
         encryption_key /= 10;
     }
 }
@@ -1322,21 +1386,21 @@ int cli__encrypt_file(char *input_filename, char *output_filename)
         if (buffer >= 'A' && buffer <= 'Z')
         {
             buffer -= 'A';
-            buffer += 26 + cli_data.cypher_key;
+            buffer += 26 + cli_data.cipher_key;
             buffer %= 26;
             buffer += 'A';
         }
         else if (buffer >= '0' && buffer <= '9')
         {
             buffer -= '0';
-            buffer += 10 + cli_data.cypher_key;
+            buffer += 10 + cli_data.cipher_key;
             buffer %= 10;
             buffer += '0';
         }
         else if (buffer >= ' ' && buffer <= '@')
         {
             buffer -= ' ';
-            buffer += 33 + cli_data.cypher_key;
+            buffer += 33 + cli_data.cipher_key;
             buffer %= 33;
             buffer += ' ';
         }
@@ -1370,21 +1434,21 @@ int cli__decrypt_file(char *input_filename, char *output_filename)
         if (buffer >= 'A' && buffer <= 'Z')
         {
             buffer -= 'A';
-            buffer += 26 - cli_data.cypher_key;
+            buffer += 26 - cli_data.cipher_key;
             buffer %= 26;
             buffer += 'A';
         }
         else if (buffer >= '0' && buffer <= '9')
         {
             buffer -= '0';
-            buffer += 10 - cli_data.cypher_key;
+            buffer += 10 - cli_data.cipher_key;
             buffer %= 10;
             buffer += '0';
         }
         else if (buffer >= ' ' && buffer <= '@')
         {
             buffer -= ' ';
-            buffer += 33 - cli_data.cypher_key;
+            buffer += 33 - cli_data.cipher_key;
             buffer %= 33;
             buffer += ' ';
         }
@@ -1397,7 +1461,6 @@ int cli__decrypt_file(char *input_filename, char *output_filename)
     return SUCCESS;
 }
 
-
 int main(int argc, char *argv[])
 {
     if (cmdOptionExists(argv, argv + argc, "-h"))
@@ -1407,7 +1470,6 @@ int main(int argc, char *argv[])
     else
     {
         cli__main_menu();
-        cout << "LOCCTR is " << hex << LOCCTR << endl;
         return SUCCESS;
     }
 }
