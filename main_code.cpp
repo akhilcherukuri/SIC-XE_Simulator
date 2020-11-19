@@ -10,13 +10,14 @@
 #include <stdio.h>
 #include <cstring>
 #include <algorithm>
+#include <iterator>
 
 using namespace std;
 
 // -----Macro Definitions-----
 
 #define MAX_STRING_BUFF_SIZE 128
-#define ENABLE_CLI 0
+#define ENABLE_CLI 1
 #define INSTRUCTION_FMT_1_BYTE_LEN 1
 #define INSTRUCTION_FMT_2_BYTE_LEN 2
 #define INSTRUCTION_FMT_3_BYTE_LEN 3
@@ -183,15 +184,15 @@ int get_BYTE_constant_byte_len();
 
 // Pass 2 Assembly Functions
 
-void generate_final_object_code(int);
-void load_immediate(int);
-void generate_final_machine_code(int);
-void load_constant(int);
-void recalculate_base_displacement(int);
-int calculate_displacement(int);
-void decode_operand_fmt_2(int);
-void set_flags(int, int);
-void look_up_opcode(int);
+void generate_final_object_code(std::vector<instruction_data_s>::iterator);
+void load_immediate(std::vector<instruction_data_s>::iterator);
+void generate_final_machine_code(std::vector<instruction_data_s>::iterator);
+void load_constant(std::vector<instruction_data_s>::iterator);
+void recalculate_base_displacement(std::vector<instruction_data_s>::iterator);
+int calculate_displacement(std::vector<instruction_data_s>::iterator);
+void decode_operand_fmt_2(std::vector<instruction_data_s>::iterator);
+void set_flags(std::vector<instruction_data_s>::iterator, int);
+void look_up_opcode(std::vector<instruction_data_s>::iterator);
 void pass_2_assembly();
 
 // -----Function Definitions-----
@@ -324,7 +325,7 @@ int validate_instruction_arguments(char *opcode_line)
         if (no_label && i == 0)
         {
             // TODO: Remove "NA" after final clean up
-            arr_instruction[0] = "NA"; // Label
+            arr_instruction[0] = "_";  // Label
             arr_instruction[1] = word; // Opcode
             i += 2;
             continue;
@@ -344,10 +345,6 @@ int validate_instruction_arguments(char *opcode_line)
     temp_instruction_data.label = arr_instruction[0];
     temp_instruction_data.opcode = arr_instruction[1];
     temp_instruction_data.operand = arr_instruction[2];
-
-    // cout << "Label " << temp_instruction_data.label << endl;
-    // cout << "Opcode " << temp_instruction_data.opcode << endl;
-    // cout << "Operand " << temp_instruction_data.operand << endl;
 
     return SUCCESS;
 }
@@ -484,7 +481,7 @@ void assign_address()
 
 void insert_in_symtab()
 {
-    if (temp_instruction_data.label != "NA" && temp_instruction_data.label != " " && temp_instruction_data.label != "")
+    if (temp_instruction_data.label != "_" && temp_instruction_data.label != " " && temp_instruction_data.label != "")
     {
         SYMTAB[temp_instruction_data.label] = LOCCTR;
         cout << temp_instruction_data.label << "  " << convert_int_to_hex_string(SYMTAB[temp_instruction_data.label]) << endl;
@@ -532,23 +529,22 @@ int pass_1_assembly()
 
 // Pass 2 Assembly Function Definitions
 
-void generate_final_object_code(int vect_i)
+void generate_final_object_code(std::vector<instruction_data_s>::iterator it)
 {
-    string temp_operand = inst_v[vect_i].operand;
-    string temp_opcode = inst_v[vect_i].opcode;
-    string temp_label = inst_v[vect_i].label;
+    string temp_operand = (*it).operand;
+    string temp_opcode = (*it).opcode;
+    string temp_label = (*it).label;
     static int start_address = 0;
-    bool temp_code_required = inst_v[vect_i].is_machine_code_required;
-    FILE *fp = fopen("object_code.txt", "a");
+    bool temp_code_required = (*it).is_machine_code_required;
+    FILE *fp = fopen(cli_data.object_code_filename, "a");
     if (temp_opcode == "START")
     {
         // Generate Header record
-        start_address = inst_v[vect_i].instr_address;
+        start_address = (*it).instr_address;
         char header_line[100] = {0};
         string program_name = temp_label;
         string starting_address = convert_int_to_hex_string(start_address);
         string length_of_object_program = convert_int_to_hex_string(LOCCTR);
-        // line = "H^ " + temp_opcode + convert_int_to_hex_string(LOCCTR);
         strcat(header_line, "H^");
         strcat(header_line, program_name.c_str());
         strcat(header_line, "^");
@@ -575,117 +571,78 @@ void generate_final_object_code(int vect_i)
         static int number_of_bytes_in_record = 0;
         static int current_record_address = start_address; // Col 2-7
         static int prev_record_address = 0;
-        // static char text_line[200];
-        // length_of_object_code; // Col 8-9
-        // object_code;           // Col 10 -69
         if (column_index == 0)
         {
-            cout << "Hit!" << endl;
-            // strcat(text_line, "T^");
             fputs("T^", fp);
             column_index = 2;
         }
         if (column_index >= 2 && column_index <= 7)
         {
-            current_record_address = inst_v[vect_i].instr_address;
+            current_record_address = (*it).instr_address;
             string record_starting_address = convert_int_to_hex_string(current_record_address);
             for (int i = 0; i < (6 - record_starting_address.length()); i++) // Zero padding
             {
-                // strcat(text_line, "0");
                 fputs("0", fp);
             }
-            // strcat(text_line, record_starting_address.c_str());
             fputs(record_starting_address.c_str(), fp);
-            // strcat(text_line, "^");
             fputs("^", fp);
             column_index = 8;
         }
         if (column_index >= 8 && column_index <= 9)
         {
-            // string length_of_object_code = "__";
-            // strcat(text_line, length_of_object_code.c_str()); // TODO: Calculate length at end
+            vector<instruction_data_s>::iterator nx = inst_v.end();
+            while ((*nx).is_machine_code_required != true)
+            {
+                nx = prev(nx, 2);
+            }
             int length_of_object_code = 0;
-            if (current_record_address + 0x1D <= LOCCTR - 1) // TODO: Subsitute 1 with length of last instruction address number
+            if (current_record_address + 0x1D <= LOCCTR - (*nx).machine_bytes)
             {
                 length_of_object_code = 0x1d;
             }
             else
             {
-                length_of_object_code = LOCCTR - 1 - prev_record_address;
+                length_of_object_code = LOCCTR - (*nx).machine_bytes - prev_record_address;
             }
 
             fputs(convert_int_to_hex_string(length_of_object_code).c_str(), fp);
-            // strcat(text_line, "^");
             fputs("^", fp);
             column_index = 10;
         }
         if (column_index >= 10 && column_index <= 69)
         {
-            string temp_m_code = convert_int_to_hex_string(inst_v[vect_i].final_machine_code); // TODO: Check for unsigned issues for 4 bytes
-            if (inst_v[vect_i].machine_bytes == 1)
+            string temp_m_code = convert_int_to_hex_string((*it).final_machine_code); // TODO: Check for unsigned issues for 4 bytes
+            int zero_padding = ((*it).machine_bytes * 2) - temp_m_code.length();
+            for (int i = 0; i < zero_padding; i++)
             {
-                for (int i = 0; i < (2 - temp_m_code.length()); i++) // Zero padding
-                {
-                    // strcat(text_line, "0");
-                    fputs("0", fp);
-                    column_index++;
-                }
+                fputs("0", fp);
+                column_index++;
             }
-            if (inst_v[vect_i].machine_bytes == 2)
-            {
-                for (int i = 0; i < (4 - temp_m_code.length()); i++) // Zero padding
-                {
-                    // strcat(text_line, "0");
-                    fputs("0", fp);
-                    column_index++;
-                }
-            }
-            if (inst_v[vect_i].machine_bytes == 3)
-            {
-                for (int i = 0; i < (6 - temp_m_code.length()); i++) // Zero padding
-                {
-                    // strcat(text_line, "0");
-                    fputs("0", fp);
-                    column_index++;
-                }
-            }
-            if (inst_v[vect_i].machine_bytes == 4)
-            {
-                for (int i = 0; i < (8 - temp_m_code.length()); i++) // Zero padding
-                {
-                    // strcat(text_line, "0");
-                    fputs("0", fp);
-                    column_index++;
-                }
-            }
-            // strcat(text_line, temp_m_code.c_str());
             fputs(temp_m_code.c_str(), fp);
-            // column_index += inst_v[vect_i].machine_bytes;
-            // number_of_bytes_in_record += inst_v[vect_i].machine_bytes;
             column_index += temp_m_code.length();
-            cout << "COLUMN INDEX: " << dec << column_index << " Machine Code: " << temp_m_code << endl;
-            // cout << "DEBUG 7: " << hex << (inst_v.at(vect_i + 1).final_machine_code) << endl;
+            // cout << "COLUMN INDEX: " << dec << column_index << " Machine Code: " << temp_m_code << endl;
+            // cout << "DEBUG 7: " << hex << ((*nx).final_machine_code) << endl;
 
-            if (column_index <= 69)
-            {
-                // strcat(text_line, "^");
-                fputs("^", fp);
-            }
+            // if (column_index <= 69)
+            // {
+            //     fputs("^", fp);
+            // }
             if ((column_index + 2) > 69) // (column_index + convert_int_to_hex_string(inst_v[vect_i + 1].final_machine_code).length()) > 69)
             {
-                // strcat(text_line, "\n");
                 fputs("\n", fp);
-                // fputs(text_line, fp);
-                // memset(text_line, 0, sizeof(text_line));
-                // current_record_address = inst_v[vect_i].instr_address;
                 column_index = 0; // Start new text record
                 number_of_bytes_in_record = 0;
-                prev_record_address = inst_v[vect_i].instr_address;
+                prev_record_address = (*it).instr_address;
             }
-            if (temp_opcode != "START" && !(temp_flags.flag_bits.p || temp_flags.flag_bits.b) && temp_flags.flag_bits.n && (temp_flags.flag_bits.i) && temp_opcode != "END" && temp_code_required && inst_v[vect_i].machine_bytes == 4)
+            else
+            {
+                fputs("^", fp);
+            }
+
+            if (temp_opcode != "START" && !(temp_flags.flag_bits.p || temp_flags.flag_bits.b) && temp_flags.flag_bits.n && (temp_flags.flag_bits.i) && temp_opcode != "END" && temp_code_required && (*it).machine_bytes == 4)
             {
                 // Generate Modification record
-                int curr_addr = inst_v[vect_i].instr_address;
+                int curr_addr = (*it).instr_address;
                 string starting_location_of_address_field = convert_int_to_hex_string(curr_addr + 1);
                 string length_of_the_address_field = "05";
                 strcat(mod_line, "M^");
@@ -721,28 +678,28 @@ void generate_final_object_code(int vect_i)
     }
     else
     {
-        cout << "Instruction not found" << endl;
+        // Assembler Directive (Skip)
     }
 
     fclose(fp);
 }
 
-void generate_final_machine_code(int vect_i)
+void generate_final_machine_code(std::vector<instruction_data_s>::iterator it)
 {
-    int num_bytes = inst_v[vect_i].machine_bytes;
+    int num_bytes = (*it).machine_bytes;
     switch (num_bytes)
     {
     case 1:
-        inst_v[vect_i].final_machine_code = (temp_machine_code.machine_code >> 24);
+        (*it).final_machine_code = (temp_machine_code.machine_code >> 24);
         break;
     case 2:
-        inst_v[vect_i].final_machine_code = (temp_machine_code.machine_code >> 16);
+        (*it).final_machine_code = (temp_machine_code.machine_code >> 16);
         break;
     case 3:
-        inst_v[vect_i].final_machine_code = (temp_machine_code.machine_code >> 8);
+        (*it).final_machine_code = (temp_machine_code.machine_code >> 8);
         break;
     case 4:
-        inst_v[vect_i].final_machine_code = (temp_machine_code.machine_code);
+        (*it).final_machine_code = (temp_machine_code.machine_code);
         break;
     default:
         // Assembler Directive
@@ -750,9 +707,9 @@ void generate_final_machine_code(int vect_i)
     }
 }
 
-void load_immediate(int vect_i)
+void load_immediate(std::vector<instruction_data_s>::iterator it)
 {
-    string temp_operand = inst_v[vect_i].operand;
+    string temp_operand = (*it).operand;
     if (temp_operand[0] == '#') // Gets rid of special chars
     {
         temp_operand = &temp_operand[1];
@@ -762,21 +719,21 @@ void load_immediate(int vect_i)
         uint32_t immediate = stoi(temp_operand);
 
         // cout << "Immediate is: " << hex << immediate << endl;
-        if (inst_v[vect_i].machine_bytes == 3)
+        if ((*it).machine_bytes == 3)
         {
             temp_machine_code.machine_code |= ((immediate << 8) & 0xFFF00);
         }
-        if (inst_v[vect_i].machine_bytes == 4)
+        if ((*it).machine_bytes == 4)
         {
             temp_machine_code.machine_code |= (immediate & 0xFFFFF);
         }
     }
 }
 
-void load_constant(int vect_i)
+void load_constant(std::vector<instruction_data_s>::iterator it)
 {
-    string temp_operand = inst_v[vect_i].operand;
-    int num_bytes = inst_v[vect_i].machine_bytes;
+    string temp_operand = (*it).operand;
+    int num_bytes = (*it).machine_bytes;
     if (temp_operand[0] == 'C')
     {
         int temp_bytes[num_bytes];
@@ -831,10 +788,10 @@ void load_constant(int vect_i)
     }
 }
 
-void recalculate_base_displacement(int vect_i)
+void recalculate_base_displacement(std::vector<instruction_data_s>::iterator it)
 {
     int new_disp = 0;
-    string temp_operand = inst_v[vect_i].operand;
+    string temp_operand = (*it).operand;
     if (temp_operand[0] == '#' || temp_operand[0] == '@') // Gets rid of special chars
     {
         temp_operand = &temp_operand[1];
@@ -843,34 +800,34 @@ void recalculate_base_displacement(int vect_i)
     if (SYMTAB.find(temp_operand) != SYMTAB.end())
     {
         uint16_t target_address = SYMTAB[temp_operand];
-        // cout << "Inst address is: " << inst_v[vect_i].instr_address << " Format " << inst_v[vect_i].machine_bytes << "Target address: " << target_address << endl;
+        // cout << "Inst address is: " << (*it).instr_address << " Format " << (*it).machine_bytes << "Target address: " << target_address << endl;
         new_disp = uint16_t(target_address - base);
     }
     temp_machine_code.machine_code &= 0xFFF000FF;                  // Clearing old displacement
     temp_machine_code.machine_code |= ((new_disp << 8) & 0xFFF00); // Also checks if disp is within 0 to 4095
 }
 
-int calculate_displacement(int vect_i)
+int calculate_displacement(std::vector<instruction_data_s>::iterator it)
 {
     uint32_t disp = 0;
-    string temp_operand = inst_v[vect_i].operand;
+    string temp_operand = (*it).operand;
     if (temp_operand[0] == '#' || temp_operand[0] == '@') // Gets rid of special chars
     {
         temp_operand = &temp_operand[1];
     }
     temp_operand = temp_operand.substr(0, temp_operand.find(",", 0)); // Removes all characters after comma
-    if (inst_v[vect_i].machine_bytes == 3)                            // Calculating Format 3 displacement
+    if ((*it).machine_bytes == 3)                                     // Calculating Format 3 displacement
     {
         if (SYMTAB.find(temp_operand) != SYMTAB.end())
         {
             uint16_t target_address = SYMTAB[temp_operand];
-            uint16_t next_instruction_address = inst_v[vect_i].instr_address + inst_v[vect_i].machine_bytes;
-            // cout << "Inst address is: " << inst_v[vect_i].instr_address << " Format " << inst_v[vect_i].machine_bytes << "Target address: " << target_address << endl;
+            uint16_t next_instruction_address = (*it).instr_address + (*it).machine_bytes;
+            // cout << "Inst address is: " << (*it).instr_address << " Format " << (*it).machine_bytes << "Target address: " << target_address << endl;
             disp = uint16_t(target_address - next_instruction_address);
         }
         temp_machine_code.machine_code |= ((disp << 8) & 0xFFF00);
     }
-    if (inst_v[vect_i].machine_bytes == 4)
+    if ((*it).machine_bytes == 4)
     {
         if (SYMTAB.find(temp_operand) != SYMTAB.end()) // Calculating Format 4 displacement
         {
@@ -887,9 +844,9 @@ int calculate_displacement(int vect_i)
 }
 
 // Register decoding for instruction format-2
-void decode_operand_fmt_2(int vect_i)
+void decode_operand_fmt_2(std::vector<instruction_data_s>::iterator it)
 {
-    string temp_operand = inst_v[vect_i].operand, temp_operands_string, temp_operand_v[2];
+    string temp_operand = (*it).operand, temp_operands_string, temp_operand_v[2];
     uint32_t operand_value = 0;
     stringstream ss(temp_operand), ss1;
     int i = 0;
@@ -918,13 +875,13 @@ void decode_operand_fmt_2(int vect_i)
     temp_machine_code.bytes.second_byte = operand_value;
 }
 
-void look_up_opcode(int vect_i)
+void look_up_opcode(std::vector<instruction_data_s>::iterator it)
 {
-    string temp_opcode = inst_v[vect_i].opcode;
+    string temp_opcode = (*it).opcode;
     // cout << "Opcode is " << temp_opcode << endl;
     // stringstream string_stream(temp_opcode); // Ignore
     int opcode_value = 0;
-    if (inst_v[vect_i].opcode[0] == '+')
+    if ((*it).opcode[0] == '+')
     {
         temp_opcode = &temp_opcode[1];
     }
@@ -937,17 +894,17 @@ void look_up_opcode(int vect_i)
     temp_machine_code.bytes.first_byte = opcode_value;
 }
 
-void set_flags(int vect_i, int disp)
+void set_flags(std::vector<instruction_data_s>::iterator it, int disp)
 {
-    string temp_operand = inst_v[vect_i].operand;
-    string temp_opcode = inst_v[vect_i].opcode;
+    string temp_operand = (*it).operand;
+    string temp_opcode = (*it).opcode;
     temp_flags.flag = 0;
     if (temp_operand[0] == '#') // Checking for immediate addressing
     {
         // cout << "Operand is: " << temp_operand << endl;
         temp_flags.flag_bits.i = 1;
         temp_flags.flag_bits.n = 0;
-        load_immediate(vect_i);
+        load_immediate(it);
     }
     else if (temp_operand[0] == '@') // Checking for indirect addressing
     {
@@ -966,7 +923,7 @@ void set_flags(int vect_i, int disp)
     {
         temp_flags.flag_bits.x = 1;
     }
-    if (inst_v[vect_i].machine_bytes == 4 && temp_opcode[0] == '+') // Checking for e
+    if ((*it).machine_bytes == 4 && temp_opcode[0] == '+') // Checking for e
     {
         temp_flags.flag_bits.e = 1;
     }
@@ -984,7 +941,7 @@ void set_flags(int vect_i, int disp)
         {
             temp_flags.flag_bits.b = 1;
             temp_flags.flag_bits.p = 0;
-            recalculate_base_displacement(vect_i);
+            recalculate_base_displacement(it);
         }
         // else
         // {
@@ -1000,42 +957,41 @@ void set_flags(int vect_i, int disp)
 //
 void pass_2_assembly()
 {
-    for (int vect_i = 0; vect_i < inst_v.size(); vect_i++)
+    for (auto it = inst_v.begin(); it < inst_v.end(); it++)
     {
         int disp = 0;
         memset(&temp_machine_code, 0, sizeof(temp_machine_code));
         // Exceptions
-        if (inst_v[vect_i].machine_bytes == 0) // Handling Base relative exception
+        if ((*it).machine_bytes == 0) // Handling Base relative exception
         {
-            if (inst_v[vect_i].opcode == "BASE")
+            if ((*it).opcode == "BASE")
             {
-                base = SYMTAB[inst_v[vect_i].operand];
+                base = SYMTAB[(*it).operand];
             }
         }
-        if (inst_v[vect_i].opcode == "BYTE")
+        if ((*it).opcode == "BYTE")
         {
-            load_constant(vect_i);
+            load_constant(it);
         }
         // Format 1-4 Operations
-        if (inst_v[vect_i].machine_bytes != 0 && inst_v[vect_i].opcode != "BYTE" && inst_v[vect_i].is_machine_code_required == true) // Ignore for Assembler Directives
+        if ((*it).machine_bytes != 0 && (*it).opcode != "BYTE" && (*it).is_machine_code_required == true) // Ignore for Assembler Directives
         {
-            look_up_opcode(vect_i); // Format 1 handled here
-            // cout << "debug 3: " << inst_v[vect_i].opcode << endl;
-            if (inst_v[vect_i].machine_bytes == 2) // Format 2 handled here
+            look_up_opcode(it);           // Format 1 handled here
+            if ((*it).machine_bytes == 2) // Format 2 handled here
             {
-                decode_operand_fmt_2(vect_i);
+                decode_operand_fmt_2(it);
             }
 
-            if (inst_v[vect_i].machine_bytes == 3 || inst_v[vect_i].machine_bytes == 4) // Format 3&4 handled here
+            if ((*it).machine_bytes == 3 || (*it).machine_bytes == 4) // Format 3&4 handled here
             {
-                disp = calculate_displacement(vect_i);
-                set_flags(vect_i, disp);
+                disp = calculate_displacement(it);
+                set_flags(it, disp);
             }
         }
-        generate_final_machine_code(vect_i);
-        // cout << inst_v[vect_i].opcode << " First byte " << hex << temp_machine_code.bytes.first_byte << " Second byte " << hex << temp_machine_code.bytes.second_byte << " Third byte " << hex << temp_machine_code.bytes.third_byte << " Fourth byte " << hex << temp_machine_code.bytes.fourth_byte << endl;
-        cout << hex << inst_v[vect_i].instr_address << " " << inst_v[vect_i].label << " " << inst_v[vect_i].opcode << " " << inst_v[vect_i].operand << " " << hex << inst_v[vect_i].final_machine_code << endl;
-        generate_final_object_code(vect_i);
+        generate_final_machine_code(it);
+        // cout << (*it).opcode << " First byte " << hex << temp_machine_code.bytes.first_byte << " Second byte " << hex << temp_machine_code.bytes.second_byte << " Third byte " << hex << temp_machine_code.bytes.third_byte << " Fourth byte " << hex << temp_machine_code.bytes.fourth_byte << endl;
+        cout << hex << uppercase << (*it).instr_address << " " << (*it).label << " " << (*it).opcode << " " << (*it).operand << " " << hex << uppercase << (*it).final_machine_code << endl;
+        generate_final_object_code(it);
     }
 }
 
@@ -1263,6 +1219,8 @@ int cli__run_program()
     cout << "------------SYMTAB-------------" << endl;
 
     pass_1_assembly();
+    cout << "-------------------------------" << endl;
+    pass_2_assembly();
 
     input_fp.close();
     instruction_fp.close();
