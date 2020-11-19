@@ -1067,12 +1067,15 @@ void display_help()
     cout << R"( - Option 3: Show Registers)" << endl;
     cout << R"( -- Input filename        -> Input Registers filename)" << endl
          << endl;
-    cout << R"( - Option 4: Encrypt Object Code)" << endl;
+    cout << R"( - Option 4: Show Assembler Directives)" << endl;
+    cout << R"( -- Input filename        -> Input ssembler Directives filename)" << endl
+         << endl;
+    cout << R"( - Option 5: Encrypt Object Code)" << endl;
     cout << R"( -- Input encryption key  -> Input Encryption Key (6 Digits))" << endl;
     cout << R"( -- Input filename        -> Input Object code filename)" << endl;
     cout << R"( -- Output filename       -> Output Encrypted Object code filename)" << endl
          << endl;
-    cout << R"( - Option 5: Decrypt Object Code)" << endl;
+    cout << R"( - Option 6: Decrypt Object Code)" << endl;
     cout << R"( -- Input decryption key  -> Input Decryption Key (6 Digits))" << endl;
     cout << R"( -- Input filename        -> Input Encrypted Object code filename)" << endl;
     cout << R"( -- Output filename       -> Output Decrypted Object code filename)" << endl
@@ -1104,13 +1107,13 @@ void cli__main_menu()
 {
 #if ENABLE_CLI == 1
     int cli_user_choice = 0, ret_status = SUCCESS;
-    string encry_key;
+    string encry_key, decry_key;
     char filename[MAX_STRING_BUFF_SIZE] = {0};
     char output_filename[MAX_STRING_BUFF_SIZE] = {0};
 
     display_title();
 
-    while (cli_user_choice <= 5)
+    while (cli_user_choice <= 6)
     {
         init_global_variables();
         cout << endl;
@@ -1166,6 +1169,11 @@ void cli__main_menu()
             if (validate_cli_encryption_key(encry_key) == true)
             {
                 key_generator(cli_data.encryption_key);
+                cout << "\n> Enter Object Code Input File Name: ";
+                cin >> filename;
+                cout << "\n> Enter Encrypted Object Code Output File Name: ";
+                cin >> output_filename;
+                ret_status = cli__encrypt_file(filename, output_filename);
             }
             else if (validate_cli_encryption_key(encry_key) == false)
             {
@@ -1175,34 +1183,29 @@ void cli__main_menu()
                 append_error_log_file();
                 cli_data.encryption_key = 0;
             }
-            cout << "\n> Enter Object Code Input File Name: ";
-            cin >> filename;
-            cout << "\n> Enter Encrypted Object Code Output File Name: ";
-            cin >> output_filename;
-            ret_status = cli__encrypt_file(filename, output_filename);
             if (ret_status != SUCCESS)
                 continue;
             break;
         case 6:
             cout << "\n> Enter 6-digit Decryption Key: ";
-            cin >> encry_key;
-            if (validate_cli_encryption_key(encry_key) == true)
+            cin >> decry_key;
+            if (validate_cli_encryption_key(decry_key) == true)
             {
                 key_generator(cli_data.encryption_key);
+                cout << "\n> Enter Encrypted Object Code Input File Name: ";
+                cin >> filename;
+                cout << "\n> Enter Object Code Output File Name: ";
+                cin >> output_filename;
+                ret_status = cli__decrypt_file(filename, output_filename);
             }
-            else if (validate_cli_encryption_key(encry_key) == false)
+            else if (validate_cli_encryption_key(decry_key) == false)
             {
-                char err_buf[128] = "\nError: Invalid Encryption Key. Enter 6 digits onlyyy.";
+                char err_buf[128] = "\nError: Invalid Decryption Key. Enter 6 digits only.";
                 cout << err_buf;
                 strncpy(error_buf, err_buf, sizeof(err_buf));
                 append_error_log_file();
                 cli_data.encryption_key = 0;
             }
-            cout << "\n> Enter Encrypted Object Code Input File Name: ";
-            cin >> filename;
-            cout << "\n> Enter Object Code Output File Name: ";
-            cin >> output_filename;
-            ret_status = cli__decrypt_file(filename, output_filename);
             if (ret_status != SUCCESS)
                 continue;
             break;
@@ -1410,6 +1413,8 @@ int cli__encrypt_file(char *input_filename, char *output_filename)
     input_file.close();
     output_file.close();
 
+    remove(input_filename);
+
     return SUCCESS;
 }
 
@@ -1457,6 +1462,8 @@ int cli__decrypt_file(char *input_filename, char *output_filename)
     }
     input_file.close();
     output_file.close();
+
+    remove(input_filename);
 
     return SUCCESS;
 }
