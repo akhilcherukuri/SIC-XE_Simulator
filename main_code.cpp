@@ -78,6 +78,7 @@ struct cli_data_s
     char registers_filename[MAX_STRING_BUFF_SIZE];
     char object_code_filename[MAX_STRING_BUFF_SIZE];
     int encryption_key;
+    int cypher_key;
 };
 
 struct flags_s
@@ -152,6 +153,12 @@ bool cmdOptionExists(char **begin, char **end, const string &option);
 bool validate_cli_encryption_key(string);
 int cli__run_program();
 int cli__show_file_contents(char *);
+
+// Caesar Cypher
+
+int cli__encrypt_file(char *input_filename, char *output_filename);
+int cli__decrypt_file(char *input_filename, char *output_filename);
+void key_generator(int encryption_key);
 
 // Utility Functions
 
@@ -1014,7 +1021,6 @@ void display_help()
     cout << R"( - Input filename        -> Input Assembly filename)" << endl;
     cout << R"( - Machine code filename -> Output Machine code filename)" << endl;
     cout << R"( - Object code filename  -> Output Object code filename)" << endl;
-    cout << R"( - Machine and Object code files encryption [y/n]: -> To select encryption)" << endl;
 }
 
 bool validate_cli_encryption_key(string encr_key)
@@ -1042,11 +1048,13 @@ void cli__main_menu()
 {
 #if ENABLE_CLI == 1
     int cli_user_choice = 0, ret_status = SUCCESS;
+    string encry_key;
     char filename[MAX_STRING_BUFF_SIZE] = {0};
+    char output_filename[MAX_STRING_BUFF_SIZE] = {0};
 
     display_title();
 
-    while (cli_user_choice <= 3)
+    while (cli_user_choice <= 5)
     {
         init_global_variables();
         cout << endl;
@@ -1054,12 +1062,14 @@ void cli__main_menu()
         cout << "1. Begin Assembler Processing\n";
         cout << "2. Show Instructions\n";
         cout << "3. Show Registers\n";
-        cout << "4. Quit\n"
+        cout << "4. Encrypt Object Code\n";
+        cout << "5. Decrypt Object Code\n";
+        cout << "6. Quit\n"
              << flush;
         cout << "\n> Enter your choice: ";
 
         cin >> cli_user_choice;
-        if (cli_user_choice >= 5 || cli_user_choice <= 0)
+        if (cli_user_choice >= 7 || cli_user_choice <= 0)
         {
             cout << endl
                  << "Invalid user choice. Exiting the program.";
@@ -1083,6 +1093,46 @@ void cli__main_menu()
             cout << "\n> Enter Register File Name: ";
             cin >> filename;
             ret_status = cli__show_file_contents(filename);
+            if (ret_status != SUCCESS)
+                continue;
+            break;
+        case 4:
+            cout << "\n> Enter 6-digit Encryption Key: ";
+            cin >> encry_key;
+            if (validate_cli_encryption_key(encry_key) == true)
+            {
+                key_generator(cli_data.encryption_key);
+            }
+            else  if (validate_cli_encryption_key(encry_key) == false)
+            {
+                cout << "Invalid Encryption Key. Enter 6 digits only." << endl;
+                cli_data.encryption_key = 0;
+            }
+            cout << "\n> Enter Object Code Input File Name: ";
+            cin >> filename;
+            cout << "\n> Enter Encrypted Object Code Output File Name: ";
+            cin >> output_filename;
+            ret_status = cli__encrypt_file(filename, output_filename);
+            if (ret_status != SUCCESS)
+                continue;
+            break;
+        case 5:
+            cout << "\n> Enter 6-digit Decryption Key: ";
+            cin >> encry_key;
+            if (validate_cli_encryption_key(encry_key) == true)
+            {
+                key_generator(cli_data.encryption_key);
+            }
+            else  if (validate_cli_encryption_key(encry_key) == false)
+            {
+                cout << "Invalid Encryption Key. Enter 6 digits only." << endl;
+                cli_data.encryption_key = 0;
+            }
+            cout << "\n> Enter Encrypted Object Code Input File Name: ";
+            cin >> filename;
+            cout << "\n> Enter Object Code Output File Name: ";
+            cin >> output_filename;
+            ret_status = cli__decrypt_file(filename, output_filename);
             if (ret_status != SUCCESS)
                 continue;
             break;
@@ -1165,25 +1215,6 @@ int cli__run_program()
     cout << "\n> Enter Object Code Filename: ";
     cin >> cli_data.object_code_filename;
 
-    cout << "\n> Do you want to encrypt the Output File? [y/n]: ";
-    cin >> encrypt_output_file_option;
-
-    if (encrypt_output_file_option == 'y')
-    {
-        cout << "\n> Enter 6-digit Encryption Key: ";
-        cin >> encry_key;
-        if (validate_cli_encryption_key(encry_key) == false)
-        {
-            cout << "Invalid Encryption Key. Enter 6 digits only." << endl;
-            return ERR_INVALID_ENCRYPTION_KEY;
-        }
-    }
-    else
-    {
-        cout << "Encryption disabled.\n";
-        cli_data.encryption_key = 0;
-    }
-
     // TODO: Check if assembler program starts with START and ends with END
     cout << "------------OPTAB-------------" << endl;
     fill_optab();
@@ -1228,6 +1259,110 @@ int cli__show_file_contents(char *filename)
     file_fp.close();
     return SUCCESS;
 }
+
+// Encryption Decryption
+
+void key_generator(int encryption_key)
+{
+    while (encryption_key > 0 || cli_data.cypher_key > 9)
+    {
+        if (encryption_key == 0)
+        {
+            encryption_key = cli_data.cypher_key;
+            cli_data.cypher_key = 0;
+        }
+        cli_data.cypher_key += encryption_key % 10;
+        encryption_key /= 10;
+    }
+}
+
+int cli__encrypt_file(char *input_filename, char *output_filename)
+{
+    ifstream input_file;
+    ofstream output_file;
+    char buffer;
+    string line;
+
+    input_file.open(input_filename);
+    output_file.open(output_filename);
+
+    buffer = input_file.get();
+
+    while (!input_file.eof())
+    {
+        if (buffer >= 'A' && buffer <= 'Z')
+        {
+            buffer -= 'A';
+            buffer += 26 + cli_data.cypher_key;
+            buffer %= 26;
+            buffer += 'A';
+        }
+        else if (buffer >= '0' && buffer <= '9')
+        {
+            buffer -= '0';
+            buffer += 10 + cli_data.cypher_key;
+            buffer %= 10;
+            buffer += '0';
+        }
+        else if (buffer >= ' ' && buffer <= '@')
+        {
+            buffer -= ' ';
+            buffer += 33 + cli_data.cypher_key;
+            buffer %= 33;
+            buffer += ' ';
+        }
+        output_file.put(buffer);
+        buffer = input_file.get();
+    }
+    input_file.close();
+    output_file.close();
+
+    return SUCCESS;
+}
+
+int cli__decrypt_file(char *input_filename, char *output_filename)
+{
+    ifstream input_file;
+    ofstream output_file;
+    char buffer;
+
+    input_file.open(input_filename);
+    output_file.open(output_filename);
+
+    buffer = input_file.get();
+
+    while (!input_file.eof())
+    {
+        if (buffer >= 'A' && buffer <= 'Z')
+        {
+            buffer -= 'A';
+            buffer += 26 - cli_data.cypher_key;
+            buffer %= 26;
+            buffer += 'A';
+        }
+        else if (buffer >= '0' && buffer <= '9')
+        {
+            buffer -= '0';
+            buffer += 10 - cli_data.cypher_key;
+            buffer %= 10;
+            buffer += '0';
+        }
+        else if (buffer >= ' ' && buffer <= '@')
+        {
+            buffer -= ' ';
+            buffer += 33 - cli_data.cypher_key;
+            buffer %= 33;
+            buffer += ' ';
+        }
+        output_file.put(buffer);
+        buffer = input_file.get();
+    }
+    input_file.close();
+    output_file.close();
+
+    return SUCCESS;
+}
+
 
 int main(int argc, char *argv[])
 {
