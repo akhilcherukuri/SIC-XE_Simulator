@@ -178,8 +178,8 @@ void insert_in_symtab();
 int parse_sample_program_into_data_structure();
 int pass_1_assembly();
 int check_validity();
-int validate_instruction_arguments(char *);
-int validate_opcode(char *);
+int validate_instruction_arguments(char *, int);
+int validate_opcode(char *, int);
 int determine_format_type();
 int increment_locctr(int);
 int get_BYTE_constant_byte_len();
@@ -308,7 +308,7 @@ int get_BYTE_constant_byte_len()
     }
 }
 
-int validate_instruction_arguments(char *opcode_line)
+int validate_instruction_arguments(char *opcode_line, int line_num)
 {
     char label[20] = {0}, opcode[20] = {0}, operand[20] = {0};
     string strFromChar, word;
@@ -342,7 +342,7 @@ int validate_instruction_arguments(char *opcode_line)
     if (number_arg >= 4)
     {
         char err_buf[256] = {0};
-        snprintf(err_buf, sizeof(err_buf), "\nInvalid number of arguments (%d) in line: %s", number_arg, opcode_line);
+        snprintf(err_buf, sizeof(err_buf), "\nLine Num: %d | Invalid number of arguments (%d) in line: %s", line_num + 1, number_arg, opcode_line);
         cout << err_buf;
         strncat(error_buf, err_buf, sizeof(err_buf));
         append_error_log_file();
@@ -356,7 +356,7 @@ int validate_instruction_arguments(char *opcode_line)
     return SUCCESS;
 }
 
-int validate_opcode(char *opcode_line)
+int validate_opcode(char *opcode_line, int line_num)
 {
     int ret_status = SUCCESS;
     string temp_opcode;
@@ -383,20 +383,20 @@ int validate_opcode(char *opcode_line)
     else
     {
         ret_status = ERR_INVALID_OPCODE;
-        cout << "\nInvalid Opcode: " << temp_instruction_data.opcode << ". Error Code: " << ret_status << endl;
-        snprintf(err_buf, sizeof(err_buf), "\nInvalid Opcode: %s. Error Code: %d", (temp_instruction_data.opcode).c_str(), ret_status);
+        snprintf(err_buf, sizeof(err_buf), "\nLine Num: %d | Invalid Opcode: %s. Error Code: %d", line_num + 1, (temp_instruction_data.opcode).c_str(), ret_status);
+        cout << err_buf;
         strncat(error_buf, err_buf, sizeof(err_buf));
         append_error_log_file();
     }
     return ret_status;
 }
 
-int check_validity(char *opcode_line)
+int check_validity(char *opcode_line, int line_num)
 {
-    int err_code = validate_instruction_arguments(opcode_line);
+    int err_code = validate_instruction_arguments(opcode_line, line_num);
     if (err_code == SUCCESS)
     {
-        err_code = validate_opcode(opcode_line);
+        err_code = validate_opcode(opcode_line, line_num);
         return err_code;
     }
     return ERR_INVALID_ARGS;
@@ -404,7 +404,7 @@ int check_validity(char *opcode_line)
 
 // Addressing Function Definitions
 
-int determine_format_type()
+int determine_format_type(int line_num)
 {
     int number_of_bytes = 0;
     char err_buf[128] = {0};
@@ -459,8 +459,8 @@ int determine_format_type()
         }
         else
         {
-            cout << "ERROR: Could not determine the Assembler Directive." << endl;
-            snprintf(err_buf, sizeof(err_buf), "\nERROR: Could not determine the Assembler Directive.");
+            snprintf(err_buf, sizeof(err_buf), "\nLine Num: %d | ERROR: Could not determine the Assembler Directive.", line_num + 1);
+            cout << err_buf;
             strncat(error_buf, err_buf, sizeof(err_buf));
             append_error_log_file();
         }
@@ -514,16 +514,16 @@ int parse_sample_program_into_data_structure()
         memset(&temp_instruction_data, 0, sizeof(temp_instruction_data));
         while (fgets(opcode_line, sizeof(opcode_line), fp))
         {
-            if (check_validity(opcode_line) == SUCCESS)
+            if (check_validity(opcode_line, line_num) == SUCCESS)
             {
                 assign_address();
                 insert_in_symtab();
-                int num_of_bytes = determine_format_type();
+                int num_of_bytes = determine_format_type(line_num);
                 ret_status = increment_locctr(num_of_bytes);
                 if (ret_status != SUCCESS)
                 {
-                    cout << "\nError at line " << line_num + 1 << ". Return Code: " << ret_status << endl;
-                    snprintf(err_buf, sizeof(err_buf), "\nError at line %d. Return Code: %d", line_num, ret_status);
+                    snprintf(err_buf, sizeof(err_buf), "\nError at line %d. Return Code: %d", line_num + 1, ret_status);
+                    cout << err_buf;
                     strncat(error_buf, err_buf, sizeof(err_buf));
                     append_error_log_file();
                 }
