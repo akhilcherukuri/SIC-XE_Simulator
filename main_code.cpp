@@ -22,6 +22,7 @@ using namespace std;
 #define INSTRUCTION_FMT_2_BYTE_LEN 2
 #define INSTRUCTION_FMT_3_BYTE_LEN 3
 #define INSTRUCTION_FMT_4_BYTE_LEN 4
+#define MAX_TEXT_RECORD_COL_LEN 69
 
 // -----Error Codes-----
 
@@ -75,7 +76,6 @@ struct cli_data_s
     char input_filename[MAX_STRING_BUFF_SIZE];
     char instructions_filename[MAX_STRING_BUFF_SIZE];
     char registers_filename[MAX_STRING_BUFF_SIZE];
-    char machine_code_filename[MAX_STRING_BUFF_SIZE];
     char object_code_filename[MAX_STRING_BUFF_SIZE];
     int encryption_key;
 };
@@ -103,7 +103,7 @@ struct machine_code_s
     uint32_t fourth_byte : 8; // Disp (8-bits) (Format-4 only)
     uint32_t third_byte : 8;  // Disp (8-bits)
     uint32_t second_byte : 8; // Contains xbpe (4-bits) + Disp(4-bits)
-    uint32_t first_byte : 8;  // Contains opcode (6-bits) + ni (2-bits)
+    uint32_t first_byte : 8;  // Contains opcode (6-bits) + ni flags (2-bits)
 };
 
 struct format_s // May not require
@@ -118,7 +118,6 @@ union machine_code_u
 
     uint32_t machine_code;
     machine_code_s bytes;
-    // format_s fmt; // May not require
 };
 
 struct instruction_data_s
@@ -141,7 +140,6 @@ cli_data_s cli_data;
 vector<instruction_data_s> inst_v;
 machine_code_u temp_machine_code;
 flags_u temp_flags;
-// int vect_i;
 int base;
 char mod_line[500] = {0};
 
@@ -324,7 +322,6 @@ int validate_instruction_arguments(char *opcode_line)
     {
         if (no_label && i == 0)
         {
-            // TODO: Remove "NA" after final clean up
             arr_instruction[0] = "_";  // Label
             arr_instruction[1] = word; // Opcode
             i += 2;
@@ -334,8 +331,6 @@ int validate_instruction_arguments(char *opcode_line)
         i++;
         number_arg++;
     }
-    // TODO: Add debug macros
-    // cout << "Number of ARGS: " << number_arg << endl;
 
     if (number_arg >= 4)
     {
@@ -609,7 +604,7 @@ void generate_final_object_code(std::vector<instruction_data_s>::iterator it)
             fputs("^", fp);
             column_index = 10;
         }
-        if (column_index >= 10 && column_index <= 69)
+        if (column_index >= 10 && column_index <= MAX_TEXT_RECORD_COL_LEN)
         {
             string temp_m_code = convert_int_to_hex_string((*it).final_machine_code); // TODO: Check for unsigned issues for 4 bytes
             int zero_padding = ((*it).machine_bytes * 2) - temp_m_code.length();
@@ -623,11 +618,7 @@ void generate_final_object_code(std::vector<instruction_data_s>::iterator it)
             // cout << "COLUMN INDEX: " << dec << column_index << " Machine Code: " << temp_m_code << endl;
             // cout << "DEBUG 7: " << hex << ((*nx).final_machine_code) << endl;
 
-            // if (column_index <= 69)
-            // {
-            //     fputs("^", fp);
-            // }
-            if ((column_index + 2) > 69) // (column_index + convert_int_to_hex_string(inst_v[vect_i + 1].final_machine_code).length()) > 69)
+            if ((column_index + 2) > MAX_TEXT_RECORD_COL_LEN) // (column_index + convert_int_to_hex_string(inst_v[vect_i + 1].final_machine_code).length()) > MAX_TEXT_RECORD_COL_LEN)
             {
                 fputs("\n", fp);
                 column_index = 0; // Start new text record
@@ -716,16 +707,16 @@ void load_immediate(std::vector<instruction_data_s>::iterator it)
     }
     if (SYMTAB.find(temp_operand) == SYMTAB.end())
     {
-        uint32_t immediate = stoi(temp_operand);
+        uint32_t immediate_operand = stoi(temp_operand);
 
-        // cout << "Immediate is: " << hex << immediate << endl;
+        // cout << "Immediate operand is: " << hex << immediate_operand << endl;
         if ((*it).machine_bytes == 3)
         {
-            temp_machine_code.machine_code |= ((immediate << 8) & 0xFFF00);
+            temp_machine_code.machine_code |= ((immediate_operand << 8) & 0xFFF00);
         }
         if ((*it).machine_bytes == 4)
         {
-            temp_machine_code.machine_code |= (immediate & 0xFFFFF);
+            temp_machine_code.machine_code |= (immediate_operand & 0xFFFFF);
         }
     }
 }
@@ -835,7 +826,6 @@ int calculate_displacement(std::vector<instruction_data_s>::iterator it)
         }
         else
         {
-            // disp = hextoint(temp_operand); // Remember
             disp = stoi(temp_operand);
         }
         temp_machine_code.machine_code |= (disp & 0xFFFFF);
@@ -857,8 +847,6 @@ void decode_operand_fmt_2(std::vector<instruction_data_s>::iterator it)
         temp_operand_v[i] = substr;
         i++;
     }
-    // ADD X, L
-    // at this point - v[0] = X, v[1] = L
 
     for (size_t i = 0; i < 2; i++)
     {
@@ -866,11 +854,9 @@ void decode_operand_fmt_2(std::vector<instruction_data_s>::iterator it)
     }
     // cout << "Operand String is: " << temp_operands_string << endl;
 
-    // temp_operands_string = "12"
     ss1 << hex << temp_operands_string;
-    // ss1 -> 0x12 -- integer
-    ss1 >> operand_value; // << copy that 0x12 = 18 here
-    //operand_value = 18 (int) <--- 8 bits correct
+
+    ss1 >> operand_value;
 
     temp_machine_code.bytes.second_byte = operand_value;
 }
@@ -953,8 +939,6 @@ void set_flags(std::vector<instruction_data_s>::iterator it, int disp)
     temp_machine_code.machine_code |= ((temp_flags.flag << 20) & 0x03F00000);
 }
 
-// By the end of Pass 1, the permanent structure (inst_v) has:
-//
 void pass_2_assembly()
 {
     for (auto it = inst_v.begin(); it < inst_v.end(); it++)
@@ -1114,7 +1098,6 @@ void cli__main_menu()
     strcpy(cli_data.instructions_filename, "instructions.txt");
     strcpy(cli_data.registers_filename, "registers.txt");
     strcpy(cli_data.assembler_directives_filename, "assembler_directives.txt");
-    strcpy(cli_data.machine_code_filename, "mcode.txt");
     strcpy(cli_data.object_code_filename, "ocode.txt");
     cli_data.encryption_key = 0;
 
@@ -1131,11 +1114,6 @@ void cli__main_menu()
     cout << "-------------------------------" << endl;
     pass_2_assembly();
 #endif
-}
-
-int get_input_files()
-{
-    return SUCCESS;
 }
 
 int cli__run_program()
@@ -1183,9 +1161,6 @@ int cli__run_program()
         cout << "\nError: Assembler Directive File Not Found." << endl;
         return ERR_INVALID_ASSEMBLER_DIRECTIVE_FILE;
     }
-
-    cout << "\n> Enter Machine Code Filename: ";
-    cin >> cli_data.machine_code_filename;
 
     cout << "\n> Enter Object Code Filename: ";
     cin >> cli_data.object_code_filename;
@@ -1263,7 +1238,6 @@ int main(int argc, char *argv[])
     else
     {
         cli__main_menu();
-        // cout << "Base is:" << hex << base << endl;
         cout << "LOCCTR is " << hex << LOCCTR << endl;
         return SUCCESS;
     }
