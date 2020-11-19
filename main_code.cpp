@@ -36,6 +36,8 @@ int ERR_INVALID_OPCODE = 6;
 int ERR_INVALID_NUM_OF_BYTES = 7;
 int ERR_INVALID_ASSEMBLER_DIRECTIVE_OPERAND = 8;
 int ERR_INVALID_ENCRYPTION_KEY = 9;
+int ERR_INVALID_INSTRUCTION_LINE = 10;
+int FAILURE = 11;
 int SUCCESS = 0;
 
 // -----Global Map Variables-----
@@ -322,7 +324,7 @@ int validate_instruction_arguments(char *opcode_line)
         number_arg++;
     }
 
-    string arr_instruction[3];
+    string arr_instruction[20];
     while (ss >> word)
     {
         if (no_label && i == 0)
@@ -339,6 +341,11 @@ int validate_instruction_arguments(char *opcode_line)
 
     if (number_arg >= 4)
     {
+        char err_buf[256] = {0};
+        snprintf(err_buf, sizeof(err_buf), "\nInvalid number of arguments (%d) in line: %s", number_arg, opcode_line);
+        cout << err_buf;
+        strncat(error_buf, err_buf, sizeof(err_buf));
+        append_error_log_file();
         return ERR_INVALID_ARGS;
     }
 
@@ -501,7 +508,7 @@ int parse_sample_program_into_data_structure()
 {
     int ret_status = SUCCESS, line_num = 0;
     FILE *fp = fopen(cli_data.input_filename, "r");
-    char opcode_line[100], err_buf[128] = {0};
+    char opcode_line[100], err_buf[500] = {0};
     if (fp != NULL)
     {
         memset(&temp_instruction_data, 0, sizeof(temp_instruction_data));
@@ -522,13 +529,18 @@ int parse_sample_program_into_data_structure()
                 }
                 inst_v.push_back(temp_instruction_data);
             }
+            else
+            {
+                return ERR_INVALID_INSTRUCTION_LINE;
+            }
+
             line_num++;
         }
         fclose(fp);
     }
     else
     {
-        char buf[128] = {0};
+        char buf[500] = {0};
         snprintf(buf, sizeof(buf), "\nError opening the Input file: %s", cli_data.input_filename);
         strncat(error_buf, buf, sizeof(buf));
         append_error_log_file();
@@ -1053,8 +1065,9 @@ void display_help()
             ███████║█████╗░░██║░░░░░██████╔╝
             ██╔══██║██╔══╝░░██║░░░░░██╔═══╝░
             ██║░░██║███████╗███████╗██║░░░░░
-            ╚═╝░░╚═╝╚══════╝╚══════╝╚═╝░░░░░)" << endl
-            << endl;
+            ╚═╝░░╚═╝╚══════╝╚══════╝╚═╝░░░░░)"
+         << endl
+         << endl;
 
     cout << R"( - Option 1: Begin Assembler Processing)" << endl;
     cout << R"( -- Input filename        -> Input Assembly filename)" << endl;
@@ -1243,7 +1256,7 @@ void cli__main_menu()
 int cli__run_program()
 {
     char encrypt_output_file_option = 'n';
-    char err_buf[128] = {0};
+    char err_buf[500] = {0};
     string encry_key;
     ifstream input_fp, instruction_fp, register_fp, assembler_directive_fp;
 
@@ -1311,7 +1324,10 @@ int cli__run_program()
     fill_adtab();
     cout << "------------SYMTAB-------------" << endl;
 
-    pass_1_assembly();
+    if (pass_1_assembly() != SUCCESS)
+    {
+        return FAILURE;
+    }
     cout << "-------------------------------" << endl;
     pass_2_assembly();
 
