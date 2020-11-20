@@ -304,7 +304,7 @@ int get_BYTE_constant_byte_len()
     {
         char err_buf[128] = "\nError: Invalid Operand(s) found in assembler directive.";
         cout << err_buf;
-        strncat(error_buf, err_buf, sizeof(err_buf));
+        strncpy(error_buf, err_buf, sizeof(err_buf));
         append_error_log_file();
         return ERR_INVALID_ASSEMBLER_DIRECTIVE_OPERAND;
     }
@@ -346,7 +346,7 @@ int validate_instruction_arguments(char *opcode_line, int line_num)
         char err_buf[256] = {0};
         snprintf(err_buf, sizeof(err_buf), "\nLine Num: %d | Invalid number of arguments (%d) in line: %s", line_num + 1, number_arg, opcode_line);
         cout << err_buf;
-        strncat(error_buf, err_buf, sizeof(err_buf));
+        strncpy(error_buf, err_buf, sizeof(err_buf));
         append_error_log_file();
         return ERR_INVALID_ARGS;
     }
@@ -387,7 +387,7 @@ int validate_opcode(char *opcode_line, int line_num)
         ret_status = ERR_INVALID_OPCODE;
         snprintf(err_buf, sizeof(err_buf), "\nLine Num: %d | Invalid Opcode: %s. Error Code: %d", line_num + 1, (temp_instruction_data.opcode).c_str(), ret_status);
         cout << err_buf;
-        strncat(error_buf, err_buf, sizeof(err_buf));
+        strncpy(error_buf, err_buf, sizeof(err_buf));
         append_error_log_file();
     }
     return ret_status;
@@ -463,7 +463,7 @@ int determine_format_type(int line_num)
         {
             snprintf(err_buf, sizeof(err_buf), "\nLine Num: %d | ERROR: Could not determine the Assembler Directive.", line_num + 1);
             cout << err_buf;
-            strncat(error_buf, err_buf, sizeof(err_buf));
+            strncpy(error_buf, err_buf, sizeof(err_buf));
             append_error_log_file();
         }
     }
@@ -526,7 +526,7 @@ int parse_sample_program_into_data_structure()
                 {
                     snprintf(err_buf, sizeof(err_buf), "\nError at line %d. Return Code: %d", line_num + 1, ret_status);
                     cout << err_buf;
-                    strncat(error_buf, err_buf, sizeof(err_buf));
+                    strncpy(error_buf, err_buf, sizeof(err_buf));
                     append_error_log_file();
                 }
                 inst_v.push_back(temp_instruction_data);
@@ -544,7 +544,7 @@ int parse_sample_program_into_data_structure()
     {
         char buf[500] = {0};
         snprintf(buf, sizeof(buf), "\nError opening the Input file: %s", cli_data.input_filename);
-        strncat(error_buf, buf, sizeof(buf));
+        strncpy(error_buf, buf, sizeof(buf));
         append_error_log_file();
         return ERR_INVALID_INPUT_FILE;
     }
@@ -789,7 +789,7 @@ int load_constant(std::vector<instruction_data_s>::iterator it)
         default:
             char buf[128] = "\nError: Invalid case for Constant Char operand";
             cout << buf;
-            strncat(error_buf, buf, sizeof(buf));
+            strncpy(error_buf, buf, sizeof(buf));
             append_error_log_file();
             ret_status = ERR_INVALID_CONSTANT_CHAR;
         }
@@ -812,7 +812,7 @@ int load_constant(std::vector<instruction_data_s>::iterator it)
         default:
             char buf[128] = "\nError: Invalid case for Hex Char operand ";
             cout << buf;
-            strncat(error_buf, buf, sizeof(buf));
+            strncpy(error_buf, buf, sizeof(buf));
             append_error_log_file();
             ret_status = ERR_INVALID_CONSTANT_HEX_CHAR;
         }
@@ -821,7 +821,7 @@ int load_constant(std::vector<instruction_data_s>::iterator it)
     {
         char buf[128] = "\nError: Invalid Character constant ";
         cout << buf;
-        strncat(error_buf, buf, sizeof(buf));
+        strncpy(error_buf, buf, sizeof(buf));
         append_error_log_file();
         ret_status = ERR_INVALID_CONSTANT_CHAR;
     }
@@ -1027,7 +1027,7 @@ int pass_2_assembly()
         }
         generate_final_machine_code(it);
         // cout << (*it).opcode << " First byte " << hex << temp_machine_code.bytes.first_byte << " Second byte " << hex << temp_machine_code.bytes.second_byte << " Third byte " << hex << temp_machine_code.bytes.third_byte << " Fourth byte " << hex << temp_machine_code.bytes.fourth_byte << endl;
-        cout << hex << uppercase << (*it).instr_address << " " << (*it).label << " " << (*it).opcode << " " << (*it).operand << " " << hex << uppercase << (*it).final_machine_code << endl;
+        cout << hex << uppercase << (*it).instr_address << " " << (*it).label << " " << (*it).opcode << " " << (*it).operand << " " << hex << uppercase << (*it).final_machine_code << endl ;
         generate_final_object_code(it);
     }
     return SUCCESS;
@@ -1138,7 +1138,6 @@ void cli__main_menu()
     FILE *fp = fopen(ERROR_LOG_FILENAME, "w");
     fputs("", fp);
     fclose(fp);
-    // remove(input_filename)
 
     display_title();
 
@@ -1330,6 +1329,7 @@ int cli__run_program()
 
     cout << "\n> Enter Object Code Filename: ";
     cin >> cli_data.object_code_filename;
+    remove(cli_data.object_code_filename);
 
     // TODO: Check if assembler program starts with START and ends with END
     cout << "------------OPTAB-------------" << endl;
