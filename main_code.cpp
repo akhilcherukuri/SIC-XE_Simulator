@@ -38,8 +38,10 @@ int ERR_INVALID_ASSEMBLER_DIRECTIVE_OPERAND = 8;
 int ERR_INVALID_ENCRYPTION_KEY = 9;
 int ERR_INVALID_INSTRUCTION_LINE = 10;
 int FAILURE = 11;
-int SUCCESS = 0;
+int ERR_INVALID_CONSTANT_CHAR = 12;
+int ERR_INVALID_CONSTANT_HEX_CHAR = 13;
 
+int SUCCESS = 0;
 // -----Global Map Variables-----
 
 // OPTAB
@@ -180,7 +182,7 @@ int pass_1_assembly();
 int check_validity();
 int validate_instruction_arguments(char *, int);
 int validate_opcode(char *, int);
-int determine_format_type();
+int determine_format_type(int);
 int increment_locctr(int);
 int get_BYTE_constant_byte_len();
 
@@ -189,13 +191,13 @@ int get_BYTE_constant_byte_len();
 void generate_final_object_code(std::vector<instruction_data_s>::iterator);
 void load_immediate(std::vector<instruction_data_s>::iterator);
 void generate_final_machine_code(std::vector<instruction_data_s>::iterator);
-void load_constant(std::vector<instruction_data_s>::iterator);
+int load_constant(std::vector<instruction_data_s>::iterator);
 void recalculate_base_displacement(std::vector<instruction_data_s>::iterator);
 int calculate_displacement(std::vector<instruction_data_s>::iterator);
 void decode_operand_fmt_2(std::vector<instruction_data_s>::iterator);
 void set_flags(std::vector<instruction_data_s>::iterator, int);
 void look_up_opcode(std::vector<instruction_data_s>::iterator);
-void pass_2_assembly();
+int pass_2_assembly();
 
 // -----Function Definitions-----
 
@@ -754,8 +756,9 @@ void load_immediate(std::vector<instruction_data_s>::iterator it)
     }
 }
 
-void load_constant(std::vector<instruction_data_s>::iterator it)
+int load_constant(std::vector<instruction_data_s>::iterator it)
 {
+    int ret_status = SUCCESS;
     string temp_operand = (*it).operand;
     int num_bytes = (*it).machine_bytes;
     if (temp_operand[0] == 'C')
@@ -788,6 +791,7 @@ void load_constant(std::vector<instruction_data_s>::iterator it)
             cout << buf;
             strncat(error_buf, buf, sizeof(buf));
             append_error_log_file();
+            ret_status = ERR_INVALID_CONSTANT_CHAR;
         }
     }
     else if (temp_operand[0] == 'X')
@@ -806,19 +810,22 @@ void load_constant(std::vector<instruction_data_s>::iterator it)
             temp_machine_code.machine_code = (temp_integer_constant << 8);
             break;
         default:
-            char buf[128] = "\nError: Invalid case for Hex Char operand";
+            char buf[128] = "\nError: Invalid case for Hex Char operand ";
             cout << buf;
             strncat(error_buf, buf, sizeof(buf));
             append_error_log_file();
+            ret_status = ERR_INVALID_CONSTANT_HEX_CHAR;
         }
     }
     else
     {
-        char buf[128] = "\nError: Invalid Character constant";
+        char buf[128] = "\nError: Invalid Character constant ";
         cout << buf;
         strncat(error_buf, buf, sizeof(buf));
         append_error_log_file();
+        ret_status = ERR_INVALID_CONSTANT_CHAR;
     }
+    return ret_status;
 }
 
 void recalculate_base_displacement(std::vector<instruction_data_s>::iterator it)
@@ -981,7 +988,7 @@ void set_flags(std::vector<instruction_data_s>::iterator it, int disp)
     temp_machine_code.machine_code |= ((temp_flags.flag << 20) & 0x03F00000);
 }
 
-void pass_2_assembly()
+int pass_2_assembly()
 {
     for (auto it = inst_v.begin(); it < inst_v.end(); it++)
     {
@@ -997,7 +1004,11 @@ void pass_2_assembly()
         }
         if ((*it).opcode == "BYTE")
         {
-            load_constant(it);
+            int ret_status = load_constant(it);
+            if (ret_status != SUCCESS)
+            {
+                return ret_status;
+            }
         }
         // Format 1-4 Operations
         if ((*it).machine_bytes != 0 && (*it).opcode != "BYTE" && (*it).is_machine_code_required == true) // Ignore for Assembler Directives
@@ -1019,6 +1030,7 @@ void pass_2_assembly()
         cout << hex << uppercase << (*it).instr_address << " " << (*it).label << " " << (*it).opcode << " " << (*it).operand << " " << hex << uppercase << (*it).final_machine_code << endl;
         generate_final_object_code(it);
     }
+    return SUCCESS;
 }
 
 // Error Log Function Definitions
@@ -1123,6 +1135,10 @@ void cli__main_menu()
     string encry_key, decry_key;
     char filename[MAX_STRING_BUFF_SIZE] = {0};
     char output_filename[MAX_STRING_BUFF_SIZE] = {0};
+    FILE *fp = fopen(ERROR_LOG_FILENAME, "w");
+    fputs("", fp);
+    fclose(fp);
+    // remove(input_filename)
 
     display_title();
 
@@ -1329,7 +1345,7 @@ int cli__run_program()
         return FAILURE;
     }
     cout << "-------------------------------" << endl;
-    pass_2_assembly();
+    int ret_status = pass_2_assembly();
 
     input_fp.close();
     instruction_fp.close();
