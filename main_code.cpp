@@ -524,7 +524,7 @@ int parse_sample_program_into_data_structure()
                 ret_status = increment_locctr(num_of_bytes);
                 if (ret_status != SUCCESS)
                 {
-                    snprintf(err_buf, sizeof(err_buf), "\nError at line %d. Return Code: %d", line_num + 1, ret_status);
+                    snprintf(err_buf, sizeof(err_buf), "\nError at line %d. Return Code: %d\n", line_num + 1, ret_status);
                     cout << err_buf;
                     strncpy(error_buf, err_buf, sizeof(err_buf));
                     append_error_log_file();
@@ -641,7 +641,7 @@ void generate_final_object_code(std::vector<instruction_data_s>::iterator it)
         }
         if (column_index >= 10 && column_index <= MAX_TEXT_RECORD_COL_LEN)
         {
-            string temp_m_code = convert_int_to_hex_string((*it).final_machine_code); // TODO: Check for unsigned issues for 4 bytes
+            string temp_m_code = convert_int_to_hex_string((*it).final_machine_code);
             int zero_padding = ((*it).machine_bytes * 2) - temp_m_code.length();
             for (int i = 0; i < zero_padding; i++)
             {
@@ -1243,7 +1243,6 @@ void cli__main_menu()
         }
     }
 
-// TODO: Only for debugging. Clean up on final commit.
 #elif ENABLE_CLI == 0
     strcpy(cli_data.input_filename, "input_assembly_file.txt");
     strcpy(cli_data.instructions_filename, "instructions.txt");
@@ -1331,7 +1330,6 @@ int cli__run_program()
     cin >> cli_data.object_code_filename;
     remove(cli_data.object_code_filename);
 
-    // TODO: Check if assembler program starts with START and ends with END
     cout << "------------OPTAB-------------" << endl;
     fill_optab();
     cout << "------------REGTAB-------------" << endl;
