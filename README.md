@@ -8,6 +8,26 @@
 3) Jesus De Haro De Reza [ ID: 011501880, jesus.deharodereza@sjsu.edu ]
 4) Ganesh Ram Pamadi [ ID: 013729586, ganeshram.pamadi@sjsu.edu ]
 ````
+## Program Files
+````text
+Assembly File Name: input_assembly_file.txt
+- This file contains the sample program that will be used generate the object code
+Instruction File Name: instructions.txt
+- This file is used to hold all the instructions available for assembly
+Register File Name: registers.txt
+- This file contains the various register that are to be loaded for performing the assembly
+Assembler Directive File Name: assembler_directives.txt
+- This file contains the assembler directives for psuedo-assembly
+Object Code Filename: object_code.txt
+- This is the final objet code output file
+Other Sample Input Filenames:
+1. input_assembly_file_with_errors_1_invalid_num_of_args
+- This file contains a sample input file that has instruction line with an invalid number of arguments
+2. input_assembly_file_with_errors_2_invalid_opcode
+- This file contains a sample input file that has instruction line with an invalid opcode
+3. input_assembly_file_with_errors_3_invalid_assembler_dir
+- This file contains a sample input file that has instruction line with an invalid assembler directive
+````
 
 ## Run Program
 
@@ -31,7 +51,6 @@ Object Code Filename: object_code.txt
 1) CLI Interface
 2) Encryption and Decryption of Object Code
 3) Error Handling with Error Log
-4) 
 ````
 
 ## Input Assembly File
